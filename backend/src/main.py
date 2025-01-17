@@ -37,14 +37,14 @@ db_config.init_db()
 manager = AttendanceManager(db_config)
 
 load_dotenv('../local.env')
-start_date = os.getenv('START_DATE')
-if not start_date:
-    start_date = datetime.now().date()  # Current date
-    set_key('../local.env', 'START_DATE', start_date.isoformat())  # Save to .env file
-    print(f"START_DATE not found. Initialized to {start_date.isoformat()}.")
-else:
-    # Parse the existing START_DATE
-    start_date = datetime.fromisoformat(start_date_str).date()
+START_DATE = os.getenv('START_DATE')
+# if not start_date:
+#     start_date = datetime.now().date()  # Current date
+#     set_key('../local.env', 'START_DATE', start_date.isoformat())  # Save to .env file
+#     print(f"START_DATE not found. Initialized to {start_date.isoformat()}.")
+# else:
+#     # Parse the existing START_DATE
+#     start_date = datetime.fromisoformat(start_date).date()
 
 def get_db():
     session = db_config.Session()
@@ -243,14 +243,29 @@ async def add_lesson(lesson_request: LessonRequest):
                 # Assign student to the lesson
                 student.lessons.append(lesson)
 
-                # Create attendance records for this student
+                current_week = get_current_week(lesson_request.created_at) # Assuming `current_week_num` is calculated elsewhere
+
                 for week in range(1, 14):  # Loop through weeks 1 to 13
+                    if week < current_week:
+                        # Fetch attendance data for past weeks
+                        if week - 1 < len(student_l.attendance):
+                            attendance_data = student_l.attendance[week - 1]
+                            arrival_time = attendance_data.arrival_time
+                            present = attendance_data.present
+                        else:
+                            arrival_time = None
+                            present = None
+                    else:
+                        # Current or future weeks
+                        arrival_time = None
+                        present = None
+
                     attendance = Attendance(
                         student=student,
                         lesson=lesson,
                         week_number=week,
-                        arrival_time=student_l.attendance.arrival_time,  # Default value, can be updated later
-                        present=None  # Default value, can be updated later
+                        arrival_time=arrival_time,  # Set arrival time
+                        present=present  # Set attendance status
                     )
                     all_week_attendances.append(attendance)
 
@@ -298,11 +313,11 @@ async def get_all_students_without_group(course_id: int, session: Session = Depe
 def get_current_week(self, current_date=None):
     if current_date is None:
         current_date = datetime.now()
-    delta = current_date.date() - self.start_date.date()
+    delta = current_date.date() - START_DATE.date()
     if delta.days < 0:
         return 0  # Before the start date
 
-    adjust_start = (7 - self.start_date.weekday()) % 7
-    adjusted_start_date = self.start_date + timedelta(days=adjust_start)
+    adjust_start = (7 - START_DATE.weekday()) % 7
+    adjusted_start_date = START_DATE + timedelta(days=adjust_start)
     full_weeks = (current_date.date() - adjusted_start_date.date()).days // 7
     return full_weeks + 1
