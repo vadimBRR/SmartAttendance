@@ -18,7 +18,6 @@ const GroupItem: React.FC<GroupItemProps> = ({ id, group }) => {
     }
   };
 
-  // Формуємо текст підказки, якщо група є
   const tooltipText = group
     ? `Start: ${group.start_time}, End: ${group.finish_time}`
     : "";
@@ -31,7 +30,7 @@ const GroupItem: React.FC<GroupItemProps> = ({ id, group }) => {
           : "bg-gray-200"
       } flex items-center justify-center`}
       onClick={handleClick}
-      title={tooltipText} // Підказка при наведенні
+      title={tooltipText} 
     >
       {group ? `Group ${id}` : ""}
     </div>

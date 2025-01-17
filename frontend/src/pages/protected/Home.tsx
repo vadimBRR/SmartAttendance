@@ -3,7 +3,7 @@ import SubjectItem from '../../components/SubjectItem';
 import { useCourses } from '../../hooks/useApi';
 
 const Home = () => {
-  const teacherId = 1; // Змініть на динамічний ID, якщо потрібно
+  const teacherId = 1; 
   const { data: subjects, isLoading, error } = useCourses(teacherId);
 
   if (isLoading) return <div>Loading...</div>;

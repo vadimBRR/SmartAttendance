@@ -5,7 +5,6 @@ import { useParams } from 'react-router-dom'
 
 const Attendance = () => {
   const { id: lessonId } = useParams<{ id: string }>();
-  // const lessonId = 1; // Змініть на динамічний ID, якщо потрібно
   if (!lessonId) return <div>No lesson ID provided</div>;
   const { data, isLoading, error } = useLessonAttendance(parseInt(lessonId!));
 
