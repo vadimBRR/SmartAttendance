@@ -1,5 +1,5 @@
 fastapi
-pydantic
+pydantic==2.10.1
 pydantic-settings
 requests
 apprise
