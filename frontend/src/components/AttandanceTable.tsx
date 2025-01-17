@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 
+interface AttendanceRecord {
+  present: boolean | null;
+  arrival_time: string | null;
+}
+
 interface StudentAttendance {
   student_id: number;
   student_name: string;
-  student_surname: string;
-  attendance: (boolean | null)[];
+  attendance: AttendanceRecord[];
 }
 
 interface AttendanceTableProps {
@@ -16,20 +20,23 @@ const AttendanceTable: React.FC<AttendanceTableProps> = ({ data }) => {
   const [selected, setSelected] = useState<{
     student_id: number;
     student_name: string;
-    student_surname: string;
     week: number;
   } | null>(null);
 
   const [attendanceData, setAttendanceData] = useState(data);
 
-  const updateAttendance = (student_id: number, week: number, newStatus: boolean | null) => {
+  const updateAttendance = (
+    student_id: number,
+    week: number,
+    newStatus: boolean | null
+  ) => {
     setAttendanceData((prevData) =>
       prevData.map((student) =>
         student.student_id === student_id
           ? {
               ...student,
-              attendance: student.attendance.map((status, index) =>
-                index === week ? newStatus : status
+              attendance: student.attendance.map((record, index) =>
+                index === week ? { ...record, present: newStatus } : record
               ),
             }
           : student
@@ -37,7 +44,9 @@ const AttendanceTable: React.FC<AttendanceTableProps> = ({ data }) => {
     );
     setSelected(null);
     console.log(
-      `Updated attendance for Student ID: ${student_id}, Week: ${week + 1}, New Status: ${newStatus}`
+      `Updated attendance for Student ID: ${student_id}, Week: ${
+        week + 1
+      }, New Status: ${newStatus}`
     );
   };
 
@@ -46,7 +55,9 @@ const AttendanceTable: React.FC<AttendanceTableProps> = ({ data }) => {
       <table className="table-auto border-collapse border border-gray-300 w-full text-gray-800">
         <thead>
           <tr>
-            <th className="border border-gray-300 p-4 bg-gray-100 text-gray-800">Student</th>
+            <th className="border border-gray-300 p-4 bg-gray-100 text-gray-800">
+              Student
+            </th>
             {weeks.map((week) => (
               <th
                 key={week}
@@ -61,18 +72,23 @@ const AttendanceTable: React.FC<AttendanceTableProps> = ({ data }) => {
           {attendanceData.map((student) => (
             <tr key={student.student_id}>
               <td className="border border-gray-300 p-4 text-gray-800">
-                {student.student_name} {student.student_surname}
+                {student.student_name}
               </td>
-              {student.attendance.map((status, index) => (
+              {student.attendance.map((record, index) => (
                 <td
                   key={index}
                   className="border border-gray-300 p-4 text-center"
+                  title={
+                    record.arrival_time
+                      ? `Arrival time: ${new Date(record.arrival_time).toLocaleString()}`
+                      : 'No arrival time'
+                  }
                 >
                   <div
                     className={`w-10 h-10 mx-auto rounded cursor-pointer transform transition-transform duration-200 ${
-                      status === true
+                      record.present === true
                         ? 'bg-green-500'
-                        : status === false
+                        : record.present === false
                         ? 'bg-red-500'
                         : 'bg-gray-300'
                     } hover:scale-110`}
@@ -80,7 +96,6 @@ const AttendanceTable: React.FC<AttendanceTableProps> = ({ data }) => {
                       setSelected({
                         student_id: student.student_id,
                         student_name: student.student_name,
-                        student_surname: student.student_surname,
                         week: index,
                       })
                     }
@@ -101,9 +116,11 @@ const AttendanceTable: React.FC<AttendanceTableProps> = ({ data }) => {
             className="bg-white p-8 rounded shadow-lg text-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-xl font-bold mb-4 text-gray-800">Update Attendance</h2>
+            <h2 className="text-xl font-bold mb-4 text-gray-800">
+              Update Attendance
+            </h2>
             <p className="mb-4 text-gray-600">
-              {selected.student_name} {selected.student_surname} - Week {selected.week + 1}
+              {selected.student_name} - Week {selected.week + 1}
             </p>
             <div className="flex gap-4 justify-center">
               <button

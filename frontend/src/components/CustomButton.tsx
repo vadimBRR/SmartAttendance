@@ -10,8 +10,8 @@ type Props={
 }
 const CustomButton = ({handleClick, text, buttonStyle='', textStyle='', disabled=false, isLoading=false}:Props) => {
   return (
-      <button onClick={handleClick} className={`bg-primary text-xl px-2 py-1 rounded-lg border border-[#ffffff]/20 ${buttonStyle} w-full`} disabled={disabled || isLoading}>
-        <p className={`text-base ${textStyle}`}>{isLoading ? 'Loading...' : text}</p>
+      <button onClick={handleClick} className={`bg-primary text-xl px-2 py-2 rounded-lg border border-[#ffffff]/20 ${buttonStyle} w-full`} disabled={disabled || isLoading}>
+        <p className={`text-base text-[#ffffff] ${textStyle}`}>{isLoading ? 'Loading...' : text}</p>
       </button>
   )
 }

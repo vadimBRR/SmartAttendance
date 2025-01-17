@@ -1,0 +1,11 @@
+fastapi
+pydantic
+pydantic-settings
+requests
+apprise
+python-dotenv
+loguru
+paho-mqtt
+apscheduler
+pytz
+sqlalchemy
