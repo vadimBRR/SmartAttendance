@@ -1,3 +1,6 @@
+import os
+
+from dotenv import set_key, load_dotenv
 from fastapi import FastAPI, Depends
 from pydantic import BaseModel
 from src.database.database_query import AttendanceManager
@@ -32,6 +35,16 @@ db_config = DatabaseConfig()
 db_config.init_db()
 # db = db_config.populate_database()
 manager = AttendanceManager(db_config)
+
+load_dotenv('../local.env')
+start_date = os.getenv('START_DATE')
+if not start_date:
+    start_date = datetime.now().date()  # Current date
+    set_key('../local.env', 'START_DATE', start_date.isoformat())  # Save to .env file
+    print(f"START_DATE not found. Initialized to {start_date.isoformat()}.")
+else:
+    # Parse the existing START_DATE
+    start_date = datetime.fromisoformat(start_date_str).date()
 
 def get_db():
     session = db_config.Session()
@@ -163,29 +176,34 @@ async def post_lesson_attendance(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
+class AttendanceInfo(BaseModel):
+    present: List[bool | None]
+    arrival_time: List[datetime | None]
 class StudentInfo(BaseModel):
     student_id: int
     name: str
-    attendance: List[Optional[bool]]  # List of attendance records (True, False, or None)
+    attendance: List[AttendanceInfo]
 
 class LessonRequest(BaseModel):
     course_id: int
-    students: List[StudentInfo]  # List of students and their attendance
-    created_at: datetime  # Timestamp of lesson creation
-    day_of_week: str  # Day of the week
-    start_time: time  # Start time of the lesson
-    finish_time: time  # Finish time of the lesson
+    students: List[StudentInfo]
+    created_at: datetime
+    day_of_week: str
+    start_time: time
+    finish_time: time
 
 @app.post("/add_lesson/")
 async def add_lesson(lesson_request: LessonRequest):
     session = db_config.Session()
     try:
-        # Default times if not provided
         start_time = lesson_request.start_time or datetime.now().time()
         finish_time = lesson_request.finish_time or (datetime.combine(datetime.today(), start_time) + timedelta(minutes=1)).time()
+        for student in lesson_request.students:
+            for attendance in student.attendance:
+                attendance.arrival_time = [
+                    time or datetime.now() for time in attendance.arrival_time
+                ]
 
-        # Check for collisions (teacher and classroom)
         conflicting_lessons = session.query(Lesson).filter(
             Lesson.day_of_week == lesson_request.day_of_week,
             (Lesson.start_time < finish_time) & (Lesson.finish_time > start_time),
@@ -208,18 +226,18 @@ async def add_lesson(lesson_request: LessonRequest):
 
         # Add students to the lesson and create attendance records
         all_week_attendances = []
-        for student_id in lesson_request.students_id:
-            student = session.query(Student).filter_by(id=student_id).one_or_none()
+        for student_l in lesson_request.students:
+            student = session.query(Student).filter_by(id=student_l.student_id).one_or_none()
             if student:
                 # Check for student conflicts
                 student_conflicts = session.query(Lesson).filter(
                     Lesson.day_of_week == lesson_request.day_of_week,
                     (Lesson.start_time < finish_time) & (Lesson.finish_time > start_time),
-                    Lesson.students.any(Student.id == student_id)
+                    Lesson.students.any(Student.id == student_l.student_id)
                 ).all()
 
                 if student_conflicts:
-                    print(f"Student ID {student_id} has a schedule conflict. Skipping assignment.")
+                    print(f"Student ID {student_l.student_id} has a schedule conflict. Skipping assignment.")
                     continue
 
                 # Assign student to the lesson
@@ -231,7 +249,7 @@ async def add_lesson(lesson_request: LessonRequest):
                         student=student,
                         lesson=lesson,
                         week_number=week,
-                        arrival_time=None,  # Default value, can be updated later
+                        arrival_time=student_l.attendance.arrival_time,  # Default value, can be updated later
                         present=None  # Default value, can be updated later
                     )
                     all_week_attendances.append(attendance)
@@ -277,3 +295,14 @@ async def get_all_students_without_group(course_id: int, session: Session = Depe
 
     return students_info
 
+def get_current_week(self, current_date=None):
+    if current_date is None:
+        current_date = datetime.now()
+    delta = current_date.date() - self.start_date.date()
+    if delta.days < 0:
+        return 0  # Before the start date
+
+    adjust_start = (7 - self.start_date.weekday()) % 7
+    adjusted_start_date = self.start_date + timedelta(days=adjust_start)
+    full_weeks = (current_date.date() - adjusted_start_date.date()).days // 7
+    return full_weeks + 1
