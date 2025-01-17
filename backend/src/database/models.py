@@ -10,6 +10,12 @@ student_lessons = Table(
     Column('lesson_id', Integer, ForeignKey('lessons.id'), primary_key=True)
 )
 
+student_courses = Table(
+'student_courses', Base.metadata,
+    Column('student_id', Integer, ForeignKey('students.id'), primary_key=True),
+    Column('course_id', Integer, ForeignKey('courses.id'), primary_key=True)
+)
+
 # Association table for the many-to-many relationship between teachers and courses
 teacher_courses = Table(
     'teacher_courses', Base.metadata,
@@ -23,6 +29,7 @@ class Student(Base):
     id = Column(BigInteger, primary_key=True)
     name = Column(String)
     email = Column(String)
+    courses = relationship('Course', secondary=student_courses, back_populates="students")
     lessons = relationship("Lesson", secondary=student_lessons, back_populates="students")
     attendances = relationship("Attendance", back_populates="student")
 
@@ -39,6 +46,7 @@ class Teacher(Base):
     __tablename__ = 'teachers'
     id = Column(Integer, primary_key=True)
     name = Column(String)
+    short_course_day = Column(String)
     lessons = relationship("Lesson", back_populates="teacher")
     courses = relationship("Course", secondary=teacher_courses, back_populates="teachers")
 

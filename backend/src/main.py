@@ -9,6 +9,8 @@ from http.client import HTTPException
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.database.models import student_courses, student_lessons
+
 app = FastAPI()
 
 origins = [
@@ -30,6 +32,13 @@ db_config = DatabaseConfig()
 db_config.init_db()
 # db = db_config.populate_database()
 manager = AttendanceManager(db_config)
+
+def get_db():
+    session = db_config.Session()
+    try:
+        yield session
+    finally:
+        session.close()
 class IdentifierPayload(BaseModel):
     id: int
     dt: int
@@ -47,23 +56,53 @@ async def get_courses(teacher_id: int):
 async def get_lessons(courses_id: int, teacher_id: int):
     return manager.get_all_lessons_by_course_teacher(course_id=courses_id, teacher_id=teacher_id)
 
-@app.get("teacher_{teacher_id}/course_{course_id}/add/lesson/")
-
 @app.get("/lessons{lesson_id}/attendance")
-async def get_lessons_attendance(lesson_id: int):
-    return manager.get_students_attendance_by_lesson(lesson_id=lesson_id)
+async def get_lessons_attendance(lesson_id: int, session: Session = Depends(get_db)):
+    try:
+        # Fetch the lesson
+        lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
+        if not lesson:
+            print(f"No lesson found with ID {lesson_id}")
+            return []
+
+        # Get all students for the lesson
+        students = lesson.students
+
+        # Build the response with attendance
+        students_data = []
+        for student in students:
+            # Fetch attendance records for the student in the specified lesson
+            attendances = session.query(Attendance).filter(
+                Attendance.lesson_id == lesson_id,
+                Attendance.student_id == student.id
+            ).order_by(Attendance.week_number.asc()).all()
+
+            # Collect attendance records as a list of dictionaries with present and arrival_time
+            attendance_records = [
+                {"present": attendance.present, "arrival_time": attendance.arrival_time}
+                for attendance in attendances
+            ]
+
+            # Add student data to the result
+            students_data.append({
+                "student_id": student.id,
+                "student_name": student.name,
+                "attendance": attendance_records
+            })
+
+        return {"students": students_data}
+
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+        return []
+    finally:
+        session.close()
 
 
 
 
 
 # Dependency to get the database session
-def get_db():
-    session = db_config.Session()
-    try:
-        yield session
-    finally:
-        session.close()
 
 # Dependency to get AttendanceManager
 def get_attendance_manager(db: Session = Depends(get_db)):
@@ -124,14 +163,19 @@ async def post_lesson_attendance(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+class StudentInfo(BaseModel):
+    student_id: int
+    name: str
+    attendance: List[Optional[bool]]  # List of attendance records (True, False, or None)
+
 class LessonRequest(BaseModel):
     course_id: int
-    teacher_id: int
-    classroom_id: int
-    day_of_week: str
-    students_id: List[int]
-    start_time: Optional[time] = None
-    finish_time: Optional[time] = None
+    students: List[StudentInfo]  # List of students and their attendance
+    created_at: datetime  # Timestamp of lesson creation
+    day_of_week: str  # Day of the week
+    start_time: time  # Start time of the lesson
+    finish_time: time  # Finish time of the lesson
 
 @app.post("/add_lesson/")
 async def add_lesson(lesson_request: LessonRequest):
@@ -206,4 +250,30 @@ async def add_lesson(lesson_request: LessonRequest):
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
     finally:
         session.close()
+
+
+@app.get("/create_group}")
+async def get_all_students_without_group(course_id: int, session: Session = Depends()):
+    students = (
+        session.query(Student)
+        .join(student_courses, Student.id == student_courses.c.student_id)
+        .outerjoin(student_lessons, Student.id == student_lessons.c.student_id)
+        .filter(
+            student_courses.c.course_id == course_id,
+            student_lessons.c.student_id.is_(None)
+        )
+        .all()
+    )
+
+    students_info = []
+    for student in students:
+        students_info.append(
+            {
+                "id": student.id,
+                "name": student.name,
+                "email": student.email
+            }
+        )
+
+    return students_info
 
