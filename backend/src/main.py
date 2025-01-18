@@ -143,7 +143,9 @@ async def get_groups(
         session: Session = Depends(get_db)
 ):
     try:
-        lessons = session.query(Lesson).filter(Lesson.course_id == course_id).filter(
+        # lessons = session.query(Lesson).filter(Lesson.course_id == course_id).filter(
+        #     Lesson.teacher_id == teacher_id).all()
+        lessons = session.query(Lesson).filter(
             Lesson.teacher_id == teacher_id).all()
         course = session.query(Course).filter(Course.id == course_id).first()
         return {
