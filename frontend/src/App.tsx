@@ -19,8 +19,8 @@ function App() {
 
         {/* Основний макет */}
         <Route element={<RootLayout />}>
-          <Route path='/' element={<Home />} />
-          <Route path='/groups/:id' element={<Groups />} />
+          {/* <Route path='/' element={<Home />} /> */}
+          <Route path='/' element={<Groups />} />
           <Route path='/attendance/:id' element={<Attendance />} />
           <Route path='/create-group' element={<CreateGroup />} /> {/* Додано маршрут */}
         </Route>
