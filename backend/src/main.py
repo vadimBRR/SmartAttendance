@@ -153,15 +153,17 @@ async def get_lessons_by_teacher(
             ).first()
 
             if course:
-                result.append({
-                    "lesson_id": lesson.id,
-                    "course_name": course.name,
-                    "short_course_name": course.short_name,
-                    "day_of_week": lesson.day_of_week,
-                    "start_time": str(lesson.start_time),
-                    "finish_time": str(lesson.finish_time)
-                })
-
+                result.append(
+                    {
+                        lesson.id: {
+                            "course_name": course.name,
+                            "short_course_name": course.short_name,
+                            "day_of_week": lesson.day_of_week,
+                            "start_time": str(lesson.start_time),
+                            "finish_time": str(lesson.finish_time)
+                        }
+                    }
+                )
         return {"lessons": result}
 
     except Exception as e:
