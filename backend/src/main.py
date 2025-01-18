@@ -353,7 +353,6 @@ def __add_students_to_lesson(lesson: Lesson, students_info: list, start_time, fi
         for student_info in students_info:
             student = session.query(Student).filter_by(id=student_info.student_id).one_or_none()
             if student:
-                # Check for student conflicts
                 student_conflicts = session.query(Lesson).filter(
                     Lesson.day_of_week == day_of_week,
                     (Lesson.start_time < finish_time) & (Lesson.finish_time > start_time),
@@ -365,10 +364,9 @@ def __add_students_to_lesson(lesson: Lesson, students_info: list, start_time, fi
                                         detail=f"Student ID {student_info.student_id} has a schedule conflict. Skipping assignment.")
 
                 student.lessons.append(lesson)
-                added_students.append(student)
                 session.commit()
-
-                print(student_info.attendance)
+                added_students.append(student)
+                # session.commit()
 
                 attendance = __add_attendances_to_all_students(
                     lesson=lesson,
@@ -417,22 +415,24 @@ def __add_attendances_to_all_students(lesson: Lesson, student: Student,
                         if len(attendance_week.present) > week - 1
                         else None
                     )
-                    arrival_time = (
-                        attendance_week.arrival_time[week - 1].replace(tzinfo=None)
-                        if present and len(attendance_week.arrival_time) > week - 1
-                        else (datetime.now() if present else None)
-                    )
+                    if attendance_week.arrival_time[week - 1] is not None:
+                        arrival_time = attendance_week.arrival_time[week - 1].replace(tzinfo=None)
+                    elif present and len(attendance_week.arrival_time) > week - 1:
+                        arrival_time = datetime.now()
+                    else:
+                        arrival_time = None
                 else:
                     present = (
                         attendance_week.present[week - 1]
                         if len(attendance_week.present) > week - 1
                         else False
                     )
-                    arrival_time = (
-                        attendance_week.arrival_time[week - 1].replace(tzinfo=None)
-                        if len(attendance_week.arrival_time) > week - 1 and present
-                        else (start_datetime if present else None)
-                    )
+                    if attendance_week.arrival_time[week - 1] is not None:
+                        arrival_time = attendance_week.arrival_time[week - 1].replace(tzinfo=None)
+                    elif present and len(attendance_week.arrival_time) > week - 1:
+                        arrival_time = datetime.now()
+                    else:
+                        arrival_time = None
             else:
                 arrival_time = None
                 present = None
