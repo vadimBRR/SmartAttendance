@@ -695,3 +695,28 @@ def verify_token(token: str = Depends(oauth2_scheme)):
 async def verify_user_token(token: str):
   verify_token(token)
   return {"message": "Token is valid"}
+
+@app.get('/verify-email/teacher')
+async def verify_email(email: str,
+                       session: Session = Depends(get_db)):
+    try:
+        result = {"id": None, "isTeacher": False}
+
+        teacher = session.query(Teacher).filter(Teacher.email == email).first()
+        if teacher:
+            result["id"] = teacher.id
+            result["isTeacher"] = True
+            return result
+
+        student = session.query(Student).filter(Student.email == email).first()
+        if student:
+            result["id"] = student.id
+            return result
+
+        raise HTTPException(status_code=404, detail="No such email found.")
+
+    except Exception as e:
+        print(f"Error verifying email: {e}")
+        raise HTTPException(status_code=500, detail="An error occurred while verifying the email.")
+    finally:
+        session.close()
