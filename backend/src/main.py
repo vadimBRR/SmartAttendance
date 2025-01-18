@@ -212,20 +212,12 @@ from typing import Literal
 
 
 @app.get("/create_group")
-async def get_all_students_without_group(course_id: int, session: Session = Depends(get_db)):
-    query = session.query(Student).join(
+async def get_all_students_without_course(course_id: int, session: Session = Depends(get_db)):
+    students = session.query(Student).outerjoin(
         student_courses,
         Student.id == student_courses.c.student_id
     ).filter(
-        student_courses.c.course_id == course_id
-    )
-
-    subquery = session.query(Lesson.id).filter(Lesson.course_id == course_id).subquery()
-    students = query.outerjoin(
-        student_lessons,
-        (Student.id == student_lessons.c.student_id) & (student_lessons.c.lesson_id.in_(subquery))
-    ).filter(
-        student_lessons.c.lesson_id.is_(None)
+        (student_courses.c.course_id != course_id) | (student_courses.c.course_id.is_(None))
     ).all()
 
     students_info = [
