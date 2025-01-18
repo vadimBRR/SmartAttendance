@@ -1,14 +1,9 @@
-import logging
-import os
-
-from dotenv import set_key, load_dotenv
 from fastapi import FastAPI, Depends
 from pydantic import BaseModel
 from src.database.database_query import AttendanceManager
 from src.database.database_config import DatabaseConfig
 from src.database.models import Lesson, Student, Attendance
-from sqlalchemy.orm import Session
-from datetime import time, datetime, timedelta
+from datetime import time, datetime
 from http.client import HTTPException
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,9 +11,7 @@ from sqlalchemy.orm import Session
 from typing import Generator
 
 from src.database.models import student_courses, student_lessons
-
 from src.database.models import Course
-
 from src.database.models import teacher_courses
 
 app = FastAPI()
@@ -160,9 +153,27 @@ async def get_courses(
 async def get_lessons(
     course_id: int,
     teacher_id: int,
-    attendance_manager: AttendanceManager = Depends(get_attendance_manager)
+    session: Session = Depends(get_db)
 ):
-    return attendance_manager.get_all_lessons_by_course_teacher(course_id, teacher_id)
+    try:
+        lessons = session.query(Lesson).filter(Lesson.course_id == course_id).filter(
+            Lesson.teacher_id == teacher_id).all()
+        course = session.query(Course).filter(Course.id == course_id).first()
+        return {
+            lesson.id: {
+                "course_name": course.name,
+                "short_course_name": course.short_name,
+                "day_of_week": lesson.day_of_week,
+                "start_time": str(lesson.start_time),
+                "finish_time": str(lesson.finish_time)
+            }
+            for lesson in lessons
+        }
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+        return []
+    finally:
+        session.close()
 
 # @app.get("/lessons/{lesson_id}/attendance")
 # async def get_lesson_attendance(
