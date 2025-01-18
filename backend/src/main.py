@@ -136,33 +136,41 @@ async def get_courses(
     return courses_info
 
 
-@app.get("/lessons/{course_id}/{teacher_id}")
-async def get_groups(
-        course_id: int,
+@app.get("/lessons/{teacher_id}")
+async def get_lessons_by_teacher(
         teacher_id: int,
         session: Session = Depends(get_db)
 ):
     try:
-        # lessons = session.query(Lesson).filter(Lesson.course_id == course_id).filter(
-        #     Lesson.teacher_id == teacher_id).all()
         lessons = session.query(Lesson).filter(
-            Lesson.teacher_id == teacher_id).all()
-        course = session.query(Course).filter(Course.id == course_id).first()
-        return {
-            lesson.id: {
-                "course_name": course.name,
-                "short_course_name": course.short_name,
-                "day_of_week": lesson.day_of_week,
-                "start_time": str(lesson.start_time),
-                "finish_time": str(lesson.finish_time)
-            }
-            for lesson in lessons
-        }
+            Lesson.teacher_id == teacher_id
+        ).all()
+
+        result = []
+        for lesson in lessons:
+            course = session.query(Course).filter(
+                Course.id == lesson.course_id
+            ).first()
+
+            if course:
+                result.append({
+                    "lesson_id": lesson.id,
+                    "course_name": course.name,
+                    "short_course_name": course.short_name,
+                    "day_of_week": lesson.day_of_week,
+                    "start_time": str(lesson.start_time),
+                    "finish_time": str(lesson.finish_time)
+                })
+
+        return {"lessons": result}
+
     except Exception as e:
         print(f"An error occurred: {str(e)}")
-        return []
+        return {"lessons": []}
+
     finally:
         session.close()
+
 
 
 @app.post("/lessons/lesson_{lesson_id}/attendance/{week_number}/{student_id}")
