@@ -1,43 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import CustomDropdown from '../../components/CustomDropdown';
 import StickyAlert from '../../components/StickyAlert';
+import { useAddLesson, useStudentsWithoutGroup, useCourses } from '../../hooks/useApi'; // Імпортуємо хук
+
+// Типізація для курсу
+interface Course {
+  id: number;
+  name: string;
+  short_name?: string; // Якщо є скорочення
+}
+
+// Типізація для студента
+interface Student {
+  id: number;
+  name: string;
+}
 
 const CreateGroup: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const addLessonMutation = useAddLesson(); // Використовуємо useAddLesson хук для додавання уроку
 
   const day = searchParams.get('day') || '';
   const start_time = searchParams.get('start_time') || '';
   const finish_time = searchParams.get('finish_time') || '';
-  const course_id = searchParams.get('course_id') || '';
+  const teacher_id = 1; // Замінено статичним значенням
+  const classroom_id = 1; // Замінено статичним значенням
 
-  const courses = [
-    { id: 1, label: 'Internet vecí a chytré zariadenia' },
-    { id: 2, label: 'Programovanie' },
-  ];
+  // Використання хука для отримання курсів
+  const { data: courses, isLoading: isCoursesLoading, error: coursesError } = useCourses(teacher_id);
 
-  const students = [
-    { id: 1231231, name: 'Vadym Brovych' },
-    { id: 1231341, name: 'Valeriia Buhaiova' },
-    { id: 1231243, name: 'Oleh Klymenko' },
-    { id: 1231346, name: 'Svitlana Hrytsenko' },
-  ];
+  // Використання хука для отримання студентів без групи
+  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
+  const { data: students, isLoading: isStudentsLoading, error: studentsError } = useStudentsWithoutGroup(
+    selectedCourseId || 0
+  );
 
   const current_week = 5;
 
-  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
-  const [selectedStudents, setSelectedStudents] = useState<number[]>(
-    students.map((student) => student.id)
-  );
-  const [attendance, setAttendance] = useState<Record<number, (boolean | null)[]>>(
-    students.reduce((acc, student) => {
-      acc[student.id] = Array(current_week).fill(true);
-      return acc;
-    }, {} as Record<number, (boolean | null)[]>)
-  );
+  const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
+  const [attendance, setAttendance] = useState<Record<number, (boolean | null)[]>>({});
 
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
+
+  // Коли обирається новий курс, оновлюємо студентів
+  useEffect(() => {
+    if (students) {
+      setSelectedStudents(students.map((student: Student) => student.id));
+      setAttendance(
+        students.reduce((acc: Record<number, (boolean | null)[]>, student: Student) => {
+          acc[student.id] = Array(current_week).fill(true);
+          return acc;
+        }, {} as Record<number, (boolean | null)[]>)
+      );
+    }
+  }, [students]);
 
   const toggleStudentSelection = (id: number) => {
     setSelectedStudents((prev) =>
@@ -66,23 +84,60 @@ const CreateGroup: React.FC = () => {
       setAlertMessage('Please select at least one student.');
       return;
     }
-
+  
+    const formatTime = (time: string): string => {
+      const [hour, minute, second] = time.split(':');
+      return `${hour.padStart(2, '0')}:${minute}:${second || '00'}`;
+    };
+  
+    const fullDayNames = {
+      Mon: 'Monday',
+      Tue: 'Tuesday',
+      Wed: 'Wednesday',
+      Thu: 'Thursday',
+      Fri: 'Friday',
+      Sat: 'Saturday',
+      Sun: 'Sunday',
+    };
+  
     const payload = {
       course_id: selectedCourseId,
+      teacher_id,
+      classroom_id,
       students: selectedStudents.map((id) => ({
         student_id: id,
-        name: students.find((student) => student.id === id)?.name,
-        attendance: attendance[id],
+        name: students.find((student: Student) => student.id === id)?.name,
+        attendance: [
+          {
+            present: attendance[id],
+            arrival_time: attendance[id].map(() => null), // Заповнюємо `arrival_time` значенням `null`
+          },
+        ],
       })),
       created_at: new Date().toISOString(),
-      day_of_week: day,
-      start_time,
-      finish_time,
+      day_of_week: fullDayNames[day as keyof typeof fullDayNames] || day,
+      start_time: formatTime(start_time),
+      finish_time: formatTime(finish_time),
     };
-
-    console.log('Submit Payload:', payload);
-    navigate('/');
+  
+    console.log(payload);
+    addLessonMutation.mutate(payload, {
+      onSuccess: () => {
+        navigate('/');
+      },
+      onError: (error: any) => {
+        setAlertMessage(error.message || 'Failed to add lesson.');
+      },
+    });
   };
+  
+  if (isCoursesLoading) {
+    return <div>Loading courses...</div>;
+  }
+
+  if (coursesError) {
+    return <div>Error loading courses: {coursesError.message}</div>;
+  }
 
   return (
     <div className="p-6 relative">
@@ -107,7 +162,10 @@ const CreateGroup: React.FC = () => {
         <div>
           <h2 className="text-2xl font-semibold mb-2 text-[#2596be]">Select Course</h2>
           <CustomDropdown
-            options={courses}
+            options={courses?.map((course: Course) => ({
+              id: course.id,
+              label: course.name,
+            })) || []}
             selectedOption={selectedCourseId}
             onSelect={setSelectedCourseId}
           />
@@ -116,7 +174,7 @@ const CreateGroup: React.FC = () => {
         <div>
           <h2 className="text-2xl font-semibold mb-4 text-[#2596be]">Select Students</h2>
           <div className="space-y-4">
-            {students.map((student, index) => (
+            {students?.map((student: Student, index: number) => (
               <div
                 key={student.id}
                 className={`p-4 rounded shadow flex items-center justify-between transition cursor-pointer ${
@@ -144,7 +202,7 @@ const CreateGroup: React.FC = () => {
                   className="p-6 rounded shadow bg-gray-50 flex flex-col gap-4"
                 >
                   <h3 className="font-bold text-lg text-gray-800">
-                    {students.find((student) => student.id === studentId)?.name}
+                    {students.find((student: Student) => student.id === studentId)?.name}
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {[...Array(current_week)].map((_, weekIndex) => (
@@ -173,9 +231,14 @@ const CreateGroup: React.FC = () => {
         <div className="flex justify-center">
           <button
             onClick={handleSubmit}
-            className="px-6 py-3 bg-[#2596be] text-white font-semibold rounded shadow hover:bg-[#197b9b] transition"
+            disabled={addLessonMutation.isPending} // Блокуємо кнопку під час завантаження
+            className={`px-6 py-3 font-semibold rounded shadow transition ${
+              addLessonMutation.isPending
+                ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                : 'bg-[#2596be] text-white hover:bg-[#197b9b]'
+            }`}
           >
-            Submit
+            {addLessonMutation.isPending ? 'Submitting...' : 'Submit'}
           </button>
         </div>
       </div>

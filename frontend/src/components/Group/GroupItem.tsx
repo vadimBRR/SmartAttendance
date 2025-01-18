@@ -6,10 +6,13 @@ interface GroupItemProps {
   group?: {
     start_time: string;
     finish_time: string;
+    short_course_name: string;
+    
   };
+  
 }
 
-const GroupItem: React.FC<GroupItemProps> = ({ id, group }) => {
+const GroupItem: React.FC<GroupItemProps> = ({ id, group, }) => {
   const navigate = useNavigate();
 
   const handleClick = () => {
@@ -32,7 +35,7 @@ const GroupItem: React.FC<GroupItemProps> = ({ id, group }) => {
       onClick={handleClick}
       title={tooltipText} 
     >
-      {group ? `Group ${id}` : ""}
+      {group ? group.short_course_name + " - " + id : ""}
     </div>
   );
 };

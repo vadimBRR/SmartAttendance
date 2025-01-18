@@ -15,11 +15,11 @@ import paho.mqtt.client as mqtt
 from paho.mqtt.client import MQTTMessage
 import json
 
-from models import Notification, Settings
+from src.models import Notification, Settings
 from src.database.database_config import DatabaseConfig
 from src.sheduler import LessonScheduler
 
-load_dotenv('../local.env')
+load_dotenv('./local.env')
 
 settings = Settings()
 logger.debug(settings)

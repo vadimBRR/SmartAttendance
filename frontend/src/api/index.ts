@@ -11,9 +11,17 @@ export const fetchCourses = async (teacherId: number) => {
 	return response.json()
 }
 
-export const fetchLessons = async (courseId: number, teacherId: number) => {
+export interface Lesson {
+  id: number;
+  day_of_week: string;
+  start_time: string;
+  finish_time: string;
+  short_course_name: string;
+}
+
+export const fetchLessons = async ( teacherId: number): Promise<{ lessons: Lesson[] }>  => {
 	const response = await fetch(
-		`${API_BASE_URL}/lessons/${courseId}/${teacherId}`,
+		`${API_BASE_URL}/lessons/${teacherId}`,
 		{
 			method: 'GET',
 			headers: {
@@ -43,6 +51,71 @@ export const fetchLessonAttendance = async (lessonId: number) => {
 	}
 	return response.json()
 }
+
+export const fetchStudentsWithoutGroup = async (courseId: number) => {
+	const response = await fetch(
+		`${API_BASE_URL}/create_group?course_id=${courseId}`,
+		{
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+		}
+	)
+	if (!response.ok) {
+		throw new Error('Failed to fetch students without group')
+	}
+	return response.json()
+}
+export const addLesson = async (payload: {
+  course_id: number;
+  students: {
+    student_id: number;
+    name: string;
+    attendance: {
+      present: (boolean | null)[];
+      arrival_time: (string | null)[];
+    }[];
+  }[];
+  created_at: string;
+  day_of_week: string;
+  start_time: string;
+  finish_time: string;
+  teacher_id: number;
+  classroom_id: number;
+}) => {
+  const response = await fetch(`${API_BASE_URL}/add_lesson/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Failed to add lesson');
+  }
+
+  return response.json();
+};
+
+export const addLessonAttendance = async ({ lessonId, weekNumber, studentId }: { lessonId: number; weekNumber: number; studentId: number }) => {
+  const response = await fetch(`${API_BASE_URL}/lessons/lesson_${lessonId}/attendance/${weekNumber}/${studentId}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Failed to add attendance');
+  }
+
+  return response.json();
+};
+
 
 import { useQuery, useMutation } from '@tanstack/react-query'
 
@@ -111,3 +184,5 @@ export const useGetUser = async (token: string): Promise<void> => {
 		throw new Error('User retrieval failed')
 	}
 }
+
+

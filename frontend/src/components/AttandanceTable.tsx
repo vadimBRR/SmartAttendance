@@ -13,9 +13,11 @@ interface StudentAttendance {
 
 interface AttendanceTableProps {
   data: StudentAttendance[];
+  lessonId: number;
+  addAttendance: (data: { lessonId: number; weekNumber: number; studentId: number }) => void; // Додаємо пропс для мутації
 }
 
-const AttendanceTable: React.FC<AttendanceTableProps> = ({ data }) => {
+const AttendanceTable: React.FC<AttendanceTableProps> = ({ data, lessonId, addAttendance }) => {
   const weeks = Array.from({ length: 13 }, (_, i) => i + 1);
   const [selected, setSelected] = useState<{
     student_id: number;
@@ -23,31 +25,21 @@ const AttendanceTable: React.FC<AttendanceTableProps> = ({ data }) => {
     week: number;
   } | null>(null);
 
-  const [attendanceData, setAttendanceData] = useState(data);
-
   const updateAttendance = (
     student_id: number,
     week: number,
     newStatus: boolean | null
   ) => {
-    setAttendanceData((prevData) =>
-      prevData.map((student) =>
-        student.student_id === student_id
-          ? {
-              ...student,
-              attendance: student.attendance.map((record, index) =>
-                index === week ? { ...record, present: newStatus } : record
-              ),
-            }
-          : student
-      )
-    );
+    // Оновлення локального стану (можна зробити це локально, без змін масиву)
     setSelected(null);
-    console.log(
-      `Updated attendance for Student ID: ${student_id}, Week: ${
-        week + 1
-      }, New Status: ${newStatus}`
-    );
+    console.log(`Updated attendance for Student ID: ${student_id}, Week: ${week + 1}, New Status: ${newStatus}`);
+
+    // Викликаємо мутацію для додавання відвідуваності
+    addAttendance({
+      lessonId,
+      weekNumber: week + 1, // Тижні починаються з 1
+      studentId: student_id,
+    });
   };
 
   return (
@@ -55,9 +47,7 @@ const AttendanceTable: React.FC<AttendanceTableProps> = ({ data }) => {
       <table className="table-auto border-collapse border border-gray-300 w-full text-gray-800">
         <thead>
           <tr>
-            <th className="border border-gray-300 p-4 bg-gray-100 text-gray-800">
-              Student
-            </th>
+            <th className="border border-gray-300 p-4 bg-gray-100 text-gray-800">Student</th>
             {weeks.map((week) => (
               <th
                 key={week}
@@ -69,11 +59,9 @@ const AttendanceTable: React.FC<AttendanceTableProps> = ({ data }) => {
           </tr>
         </thead>
         <tbody>
-          {attendanceData.map((student) => (
+          {data.map((student) => (
             <tr key={student.student_id}>
-              <td className="border border-gray-300 p-4 text-gray-800">
-                {student.student_name}
-              </td>
+              <td className="border border-gray-300 p-4 text-gray-800">{student.student_name}</td>
               {student.attendance.map((record, index) => (
                 <td
                   key={index}
@@ -116,9 +104,7 @@ const AttendanceTable: React.FC<AttendanceTableProps> = ({ data }) => {
             className="bg-white p-8 rounded shadow-lg text-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-xl font-bold mb-4 text-gray-800">
-              Update Attendance
-            </h2>
+            <h2 className="text-xl font-bold mb-4 text-gray-800">Update Attendance</h2>
             <p className="mb-4 text-gray-600">
               {selected.student_name} - Week {selected.week + 1}
             </p>
