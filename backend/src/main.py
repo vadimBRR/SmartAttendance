@@ -146,24 +146,20 @@ async def get_lessons_by_teacher(
             Lesson.teacher_id == teacher_id
         ).all()
 
-        result = []
+        result = {}
         for lesson in lessons:
             course = session.query(Course).filter(
                 Course.id == lesson.course_id
             ).first()
 
             if course:
-                result.append(
-                    {
-                        lesson.id: {
-                            "course_name": course.name,
-                            "short_course_name": course.short_name,
-                            "day_of_week": lesson.day_of_week,
-                            "start_time": str(lesson.start_time),
-                            "finish_time": str(lesson.finish_time)
-                        }
-                    }
-                )
+                result[lesson.id] = {
+                    "course_name": course.name,
+                    "short_course_name": course.short_name,
+                    "day_of_week": lesson.day_of_week,
+                    "start_time": str(lesson.start_time),
+                    "finish_time": str(lesson.finish_time)
+                }
         return {"lessons": result}
 
     except Exception as e:
