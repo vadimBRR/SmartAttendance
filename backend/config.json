@@ -1,4 +1,6 @@
 {
-  "STATE": "NORMAL",
-  "START_DATE": "2025-01-01"
+    "STATE": "NORMAL",
+    "START_DATE": "2025-01-01",
+    "TEACHER_ID": 1,
+    "CLASROOM_ID": 1
 }

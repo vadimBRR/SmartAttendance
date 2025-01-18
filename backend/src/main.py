@@ -409,30 +409,35 @@ def __add_attendances_to_all_students(lesson: Lesson, student: Student,
 
         for week in range(1, 14):
             if attendance_week and week <= current_week:
-                if week == current_week:
-                    present = (
-                        attendance_week.present[week - 1]
-                        if len(attendance_week.present) > week - 1
-                        else None
-                    )
-                    if attendance_week.arrival_time[week - 1] is not None:
-                        arrival_time = attendance_week.arrival_time[week - 1].replace(tzinfo=None)
-                    elif present and len(attendance_week.arrival_time) > week - 1:
-                        arrival_time = datetime.now()
+                try:
+                    if week == current_week:
+                        present = (
+                            attendance_week.present[week - 1]
+                            if week - 1 < len(attendance_week.present)
+                            else None
+                        )
+                        arrival_time = (
+                            attendance_week.arrival_time[week - 1].replace(tzinfo=None)
+                            if week - 1 < len(attendance_week.arrival_time) and attendance_week.arrival_time[
+                                week - 1] is not None
+                            else datetime.now() if present and week - 1 < len(attendance_week.arrival_time)
+                            else None
+                        )
                     else:
-                        arrival_time = None
-                else:
-                    present = (
-                        attendance_week.present[week - 1]
-                        if len(attendance_week.present) > week - 1
-                        else False
-                    )
-                    if attendance_week.arrival_time[week - 1] is not None:
-                        arrival_time = attendance_week.arrival_time[week - 1].replace(tzinfo=None)
-                    elif present and len(attendance_week.arrival_time) > week - 1:
-                        arrival_time = datetime.now()
-                    else:
-                        arrival_time = None
+                        present = (
+                            attendance_week.present[week - 1]
+                            if week - 1 < len(attendance_week.present)
+                            else False
+                        )
+                        arrival_time = (
+                            attendance_week.arrival_time[week - 1].replace(tzinfo=None)
+                            if week - 1 < len(attendance_week.arrival_time) and attendance_week.arrival_time[
+                                week - 1] is not None
+                            else None
+                        )
+                except IndexError:
+                    present = None
+                    arrival_time = None
             else:
                 arrival_time = None
                 present = None
