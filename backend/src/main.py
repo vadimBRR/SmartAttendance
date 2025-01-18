@@ -230,11 +230,10 @@ from typing import Literal
 
 @app.get("/create_group")
 async def get_all_students_without_course(course_id: int, session: Session = Depends(get_db)):
-    students = session.query(Student).outerjoin(
-        student_courses,
-        Student.id == student_courses.c.student_id
-    ).filter(
-        (student_courses.c.course_id != course_id) | (student_courses.c.course_id.is_(None))
+    students = session.query(Student).filter(
+        ~Student.id.in_(
+            session.query(student_courses.c.student_id).filter(student_courses.c.course_id == course_id)
+        )
     ).all()
 
     students_info = [
