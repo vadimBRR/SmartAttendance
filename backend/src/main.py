@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from src.database.database_query import AttendanceManager
 from src.database.database_config import DatabaseConfig
 from datetime import time, datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Literal
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import Generator
@@ -12,9 +12,8 @@ from src.database.models import (student_courses, student_lessons,
                                  teacher_courses, Course, Teacher, Classroom,
                                  Lesson, Student, Attendance)
 
-
-
 app = FastAPI()
+
 
 origins = [
     "http://localhost",
@@ -31,10 +30,16 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+config_file = "config.json"
 def load_config():
-    with open('config.json', 'r') as config_file:
-        config = json.load(config_file)
-    return config
+    try:
+        with open(config_file, 'r') as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        default_config = {"START_DATE": datetime.now().isoformat(), "STATE": "NORMAL"}
+        with open(config_file, "w") as file:
+            json.dump(default_config, file, indent=4)
+        return default_config
 
 
 config = load_config()
@@ -51,13 +56,14 @@ else:
     START_DATE = datetime.now()
     print(f"START_DATE not found. Initialized to {START_DATE.isoformat()}.")
 
-
 def get_db() -> Generator[Session, None, None]:
     session = db_config.Session()
     try:
         yield session
     finally:
         session.close()
+def get_attendance_manager(db: Session = Depends(get_db)):
+    return AttendanceManager(db_config=db_config)
 
 
 @app.get("/lessons{lesson_id}/attendance")
@@ -95,18 +101,9 @@ async def get_lessons_attendance(lesson_id: int, session: Session = Depends(get_
         session.close()
 
 
-# Dependency to get the database session
-
-# Dependency to get AttendanceManager
-def get_attendance_manager(db: Session = Depends(get_db)):
-    return AttendanceManager(db_config=db_config)
-
-
-# Models
 class IdentifierPayload(BaseModel):
     id: int
     dt: int
-
 
 @app.post("/notifications/")
 async def receive_attendance(
@@ -165,6 +162,7 @@ async def get_groups(
     finally:
         session.close()
 
+
 @app.post("/lessons/lesson_{lesson_id}/attendance/{week_number}/{student_id}")
 async def post_lesson_attendance(
         lesson_id: int,
@@ -177,6 +175,43 @@ async def post_lesson_attendance(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+from typing import Literal
+
+# @app.post("/notifications/fetch-data")
+# async def get_state(state: Literal["NORMAL", "TEST"]):
+#     try:
+#         config_data = load_config()
+#         config_data["STATE"] = state.upper()
+#         with open(config_file, "w") as file:
+#             json.dump(config_data, file, indent=4)
+#         return {"state": config_data["STATE"]}
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error updating state: {e}")
+
+
+@app.get("/create_group")
+async def get_all_students_without_group(course_id: int, session: Session = Depends(get_db)):
+    query = session.query(Student).join(
+        student_courses,
+        Student.id == student_courses.c.student_id
+    ).filter(
+        student_courses.c.course_id == course_id
+    )
+
+    subquery = session.query(Lesson.id).filter(Lesson.course_id == course_id).subquery()
+    students = query.outerjoin(
+        student_lessons,
+        (Student.id == student_lessons.c.student_id) & (student_lessons.c.lesson_id.in_(subquery))
+    ).filter(
+        student_lessons.c.lesson_id.is_(None)
+    ).all()
+
+    students_info = [
+        {"id": student.id, "name": student.name, "email": student.email}
+        for student in students
+    ]
+
+    return students_info
 
 class AttendanceInfo(BaseModel):
     present: List[Optional[bool]]
@@ -260,11 +295,11 @@ async def add_lesson(lesson_request: LessonRequest, session: Session = Depends(g
 def __add_lesson(course_id: int, teacher_id: int, classroom_id: int, day_of_week: str,
                  start_time, finish_time, session: Session = Depends(get_db)):
     try:
-        start_time = start_time.replace(
-            tzinfo=None) if start_time and start_time.tzinfo else datetime.now().time()
-        finish_time = finish_time.replace(
-            tzinfo=None) if finish_time and finish_time.tzinfo else (
-                datetime.combine(datetime.today(), start_time) + timedelta(minutes=1)).time()
+        if not isinstance(start_time, time) or not isinstance(finish_time, time):
+            raise ValueError("Invalid start_time or finish_time. They must be valid time objects.")
+
+        if start_time >= finish_time:
+            raise HTTPException(status_code=400, detail="Start time must be earlier than finish time.")
 
         conflicting_lessons = session.query(Lesson).filter(
             Lesson.day_of_week == day_of_week,
@@ -412,31 +447,6 @@ def __add_attendances_to_all_students(lesson: Lesson, student: Student,
     except Exception as e:
         session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/create_group")
-async def get_all_students_without_group(course_id: int, session: Session = Depends(get_db)):
-    query = session.query(Student).join(
-        student_courses,
-        Student.id == student_courses.c.student_id
-    ).filter(
-        student_courses.c.course_id == course_id
-    )
-
-    subquery = session.query(Lesson.id).filter(Lesson.course_id == course_id).subquery()
-    students = query.outerjoin(
-        student_lessons,
-        (Student.id == student_lessons.c.student_id) & (student_lessons.c.lesson_id.in_(subquery))
-    ).filter(
-        student_lessons.c.lesson_id.is_(None)
-    ).all()
-
-    students_info = [
-        {"id": student.id, "name": student.name, "email": student.email}
-        for student in students
-    ]
-
-    return students_info
 
 
 # from datetime import datetime, timedelta
