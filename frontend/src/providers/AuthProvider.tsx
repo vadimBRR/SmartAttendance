@@ -10,12 +10,12 @@ import { useLogin, useVerifyToken, useRegister } from '../api'
 
 type AuthContextType = {
 	token: string | null
-	login: (username: string, password: string) => Promise<void>
-	register: (username: string, password: string) => Promise<void>
+	login: (email: string, password: string) => Promise<void>
+	register: (email: string, password: string) => Promise<void>
 	logout: () => void
 	isLoading: boolean
 	error: string | null
-  username: string | null
+  email: string | null
   
 }
 const AuthContext = createContext<AuthContextType>({
@@ -25,29 +25,29 @@ const AuthContext = createContext<AuthContextType>({
 	logout: () => {},
 	isLoading: false,
 	error: null,
-  username: null
+  email: null
 })
 
 export const AuthProvider = ({ children }: PropsWithChildren) => {
-  const [username, setUsername] = useState<string | null>(localStorage.getItem('username'));
+  const [email, setEmail] = useState<string | null>(localStorage.getItem('email'));
 	const [token, setToken] = useState(localStorage.getItem('token'))
 	const [isLoading, setIsLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const navigate = useNavigate()
 
-	const login = async (username: string, password: string) => {
+	const login = async (email: string, password: string) => {
     console.log("here");
 		setIsLoading(true)
 		setError(null)
 		try {
       console.log("here");
-			const data = await useLogin(username, password)
+			const data = await useLogin(email, password)
       console.log(data);
       console.log(data);
 			localStorage.setItem('token', data.access_token)
-      localStorage.setItem('username', data.username);
+      localStorage.setItem('email', data.email);
 			setToken(data.access_token)
-      setUsername(username)
+      setEmail(email)
 			navigate('/')
 		} catch (error: any) {
 			setError(error.message || 'Authentication failed')
@@ -57,12 +57,12 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
 	}
 
 
-	const register = async (username: string, password: string) => {
+	const register = async (email: string, password: string) => {
 		setIsLoading(true)
 		setError(null)
 		try {
-			await useRegister(username, password)
-			await login(username, password)
+			await useRegister(email, password)
+			await login(email, password)
 		} catch (error: any) {
 			setError(error.message || 'Registration failed')
 		} finally {
@@ -92,7 +92,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
 
 	return (
 		<AuthContext.Provider
-			value={{ token, login, register, logout, isLoading, error,username }}
+			value={{ token, login, register, logout, isLoading, error,email }}
 		>
 			{children}
 		</AuthContext.Provider>

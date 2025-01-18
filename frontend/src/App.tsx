@@ -7,19 +7,20 @@ import CreateGroup from './pages/protected/CreateGroup'; // Імпортуємо
 import RootLayout from './pages/protected/RootLayout';
 import SignIn from './pages/auth/SignIn';
 import AuthLayout from './pages/auth/AuthLayout';
+import SignUp from './pages/auth/SignUp'
 
 function App() {
   return (
     <div className='flex h-screen w-full'>
       <Routes>
         {/* Авторизаційний макет */}
-        {/* <Route element={<AuthLayout />}>
+        <Route element={<AuthLayout />}>
           <Route path='/sign-in' element={<SignIn />} />
-        </Route> */}
+          <Route path='/sign-up' element={<SignUp />} />
+        </Route>
 
         {/* Основний макет */}
         <Route element={<RootLayout />}>
-          {/* <Route path='/' element={<Home />} /> */}
           <Route path='/' element={<Groups />} />
           <Route path='/attendance/:id' element={<Attendance />} />
           <Route path='/create-group' element={<CreateGroup />} /> {/* Додано маршрут */}

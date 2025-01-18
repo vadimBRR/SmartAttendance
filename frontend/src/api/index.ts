@@ -117,25 +117,24 @@ export const addLessonAttendance = async ({ lessonId, weekNumber, studentId }: {
 };
 
 
-import { useQuery, useMutation } from '@tanstack/react-query'
 
 import { useAuth } from '../providers/AuthProvider'
 
 export interface LoginResponse {
 	access_token: string
-	username: string
+	email: string
 }
 export interface PredictionResponse {
 	predicted_total_price: number
 }
 
 export const useLogin = async (
-	username: string,
+	email: string,
 	password: string
 ): Promise<LoginResponse> => {
-	console.log(username)
+	console.log(email)
 	const formDetails = new URLSearchParams()
-	formDetails.append('username', username)
+	formDetails.append('username', email)
 	formDetails.append('password', password)
 
 	const response = await fetch('http://127.0.0.1:8000/token', {
@@ -153,13 +152,13 @@ export const useLogin = async (
 }
 
 export const useRegister = async (
-	username: string,
+	email: string,
 	password: string
 ): Promise<void> => {
 	const response = await fetch('http://127.0.0.1:8000/register', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ username, password }),
+		body: JSON.stringify({ email, password }),
 	})
 
 	if (!response.ok) {

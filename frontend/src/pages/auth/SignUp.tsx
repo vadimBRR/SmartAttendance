@@ -5,19 +5,19 @@ import { useAuth } from '../../providers/AuthProvider'
 import { Link } from 'react-router-dom'
 
 const SignUp = () => {
-	const [username, setUsername] = useState('')
+	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
 	const { register, isLoading, error } = useAuth()
 	const handleRegister = async () => {
-		await register(username, password)
+		await register(email, password)
 	}
 	return (
 		<div>
 			<p className='text-center text-2xl'>Sign Up </p>
 			<CustomInput
-				name={username}
-				setName={setUsername}
-				title='Username'
+				name={email}
+				setName={setEmail}
+				title='Email'
 				containerStyle='my-4'
 			/>
 			<CustomInput
@@ -29,7 +29,7 @@ const SignUp = () => {
 			/>
 			<CustomButton
 				handleClick={handleRegister}
-				text='Sign In'
+				text='Sign Up'
 				isLoading={isLoading}
 			/>
 			<p className='text-[#ff0000] mb-2'>{error}</p>

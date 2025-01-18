@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, BigInteger, Boolean, Table, Time
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, BigInteger, Boolean, Table, Time, Float
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -79,3 +79,21 @@ class Attendance(Base):
     present = Column(Boolean, nullable=True)  # True for present, False for absent, NULL for not recorded
     student = relationship("Student", back_populates="attendances")
     lesson = relationship("Lesson", back_populates="attendances")
+    
+    
+class Transaction(Base):
+  __tablename__ = "transactions"
+
+  id = Column(Integer, primary_key=True, index=True)
+  amount = Column(Float)
+  category = Column(String, index=True)
+  description = Column(String, index=True)
+  is_income = Column(Boolean) 
+  date = Column(String)
+  
+class User(Base):
+  __tablename__ = "users"
+
+  id = Column(Integer, primary_key=True, index=True)
+  email = Column(String, unique=True, index=True)  
+  hashed_password = Column(String)

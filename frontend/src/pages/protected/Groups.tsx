@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import GroupItem from '../../components/Group/GroupItem';
 import EmptyGroupItem from '../../components/Group/EmptyGroupItem';
 import Modal from '../../components/Modal'; // Імпорт модального вікна
-import { Monitor } from 'lucide-react'; // Імпорт іконки з lucide-react
+import { Monitor, LogOut } from 'lucide-react'; // Імпорт іконок з lucide-react
 import { useLessons } from '../../hooks/useApi';
+import { useAuth } from '../../providers/AuthProvider'
 
 const time = ['7:30', '9:10', '10:50', '13:30', '15:10'];
 const week_days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-// Мапінг для перетворення скорочених назв днів у повні
 const fullDayNames = {
   Mon: 'Monday',
   Tue: 'Tuesday',
@@ -40,6 +40,7 @@ const Groups = () => {
   const courseId = '1';
   const teacherId = 1;
   const { data, isLoading, error } = useLessons(teacherId);
+  const { logout } = useAuth(); // Отримуємо функцію logout
 
   const toggleModal = () => setModalOpen(!isModalOpen);
 
@@ -52,7 +53,6 @@ const Groups = () => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      {/* Заголовок сторінки */}
       <div className="mb-6 text-center relative">
         <h1 className="text-4xl font-bold text-[#2596be] mb-2">SmartAttendance</h1>
         <p className="text-lg text-gray-600 max-w-2xl mx-auto">
@@ -60,20 +60,33 @@ const Groups = () => {
           It helps teachers track student attendance during lessons in real-time, while students can view their attendance records.
           Stay organized and ensure attendance accuracy!
         </p>
-        {/* Кнопка для модального вікна */}
-        <button
-          className="absolute top-0 right-0 bg-[#2596be] text-white p-2 rounded shadow hover:bg-[#197b9b] transition"
-          onClick={toggleModal}
-          title="Open IC Scanner"
-        >
-          <Monitor size={24} />
-        </button>
+        
+        {/* Кнопки для відкриття модального вікна та виходу */}
+        <div className="absolute top-0 right-0 flex flex-col gap-4">
+          {/* Кнопка для виходу */}
+          <button
+            className="bg-[#f44336] text-white p-2 rounded shadow hover:bg-[#d32f2f] transition"
+            onClick={logout} // Викликаємо logout
+            title="Log Out"
+          >
+            <LogOut size={24} />
+          </button>
+          {/* Кнопка для відкриття модального вікна */}
+          <button
+            className="bg-[#2596be] text-white p-2 rounded shadow hover:bg-[#197b9b] transition"
+            onClick={toggleModal}
+            title="Open IC Scanner"
+          >
+            <Monitor size={24} />
+          </button>
+          
+          
+        </div>
       </div>
 
       {/* Модальне вікно */}
       <Modal isOpen={isModalOpen} onClose={toggleModal}></Modal>
 
-      {/* Таблиця розкладу */}
       <div className="flex flex-col gap-2 bg-white rounded shadow pb-2">
         <div
           className="grid gap-x-4"

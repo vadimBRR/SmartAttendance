@@ -3,17 +3,31 @@ from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
 from src.database.database_query import AttendanceManager
 from src.database.database_config import DatabaseConfig
-from datetime import time, datetime, timedelta
-from typing import List, Optional, Literal
+from datetime import time, datetime, timedelta,timezone
+from jose import jwt, JWTError
+
+from typing import List, Optional, Literal,Annotated
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import Generator
 from src.database.models import (student_courses, student_lessons,
                                  teacher_courses, Course, Teacher, Classroom,
-                                 Lesson, Student, Attendance)
+                                 Lesson, Student, Attendance, Classroom, User as UserM,Transaction as TransactionM)
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from passlib.context import CryptContext 
+
 
 app = FastAPI()
 
+
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 origins = [
     "http://localhost",
@@ -545,3 +559,122 @@ def __validate_lesson_request(lesson_request: LessonRequest, session: Session):
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+      
+      
+      
+class Transaction(BaseModel):
+  amount: float
+  category: str
+  description: str
+  is_income: bool
+  date: str
+  
+  
+class TransactionModel(BaseModel):
+  id: int
+  
+  class Config:
+    from_attributes = True
+    
+class UserCreate(BaseModel):
+  email: str  # Замість email
+  password: str
+  
+class TokenData(BaseModel):
+  email: str  # Замість email
+  
+class User(BaseModel):
+  id: int
+  email: str  # Замість email
+
+  
+    
+
+    
+db_dependency = Annotated[Session, Depends(get_db)]
+
+
+#Transactions
+@app.post("/transactions/", response_model=TransactionModel)
+async def create_transaction(transaction: Transaction, db: db_dependency):
+  db_transaction = TransactionM(**transaction.dict())
+  db.add(db_transaction)
+  db.commit()
+  db.refresh(db_transaction)
+  return db_transaction
+
+@app.get("/transactions/", response_model=List[TransactionModel])
+async def read_transactions(db: db_dependency, skip: int = 0, limit: int = 100):
+  return db.query(TransactionM).offset(skip).limit(limit).all()
+
+
+#Create User
+def get_user_by_email(email: str, db: db_dependency):
+  return db.query(UserM).filter(UserM.email == email).first()
+
+def create_user(user: UserCreate, db: db_dependency):
+  hashed_password = pwd_context.hash(user.password)
+  db_user = UserM(email=user.email, hashed_password=hashed_password)
+  db.add(db_user)
+  db.commit()
+  db.refresh(db_user)
+  return db_user
+
+@app.post('/register/')
+def register(user: UserCreate, db: Session = Depends(get_db)):
+  db_user = get_user_by_email(user.email, db)
+  if db_user:
+    raise HTTPException(status_code=400, detail="Email already exists")
+  return create_user(user, db)
+
+#Login
+def authenticate_user(email: str, password: str, db: Session):
+  user = get_user_by_email(email, db)
+  if not user:
+    return False
+  if not pwd_context.verify(password, user.hashed_password):
+    return False
+  return user
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+  to_encode = data.copy()
+  if expires_delta:
+    expire = datetime.now(timezone.utc) + expires_delta
+  else:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+  to_encode.update({"exp": expire})
+  encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+  return encoded_jwt
+
+
+    
+@app.post('/token/')
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = authenticate_user(form_data.username, form_data.password, db)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer", "email": user.email}
+
+#Verify Token
+def verify_token(token: str = Depends(oauth2_scheme)):
+  try:
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    email: str = payload.get("sub")
+    if email is None:
+      raise HTTPException(status_code=403, detail="Token is invalid or expired")
+    return payload
+  except JWTError:
+    raise HTTPException(status_code=403, detail="Token is invalid or expired")
+
+@app.get('/verify-token/{token}')
+async def verify_user_token(token: str):
+  verify_token(token)
+  return {"message": "Token is valid"}
