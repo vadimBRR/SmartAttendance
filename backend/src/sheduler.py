@@ -1,3 +1,5 @@
+import json
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timedelta
 import pytz
@@ -6,12 +8,13 @@ from sqlalchemy import func
 from src.database.models import Lesson, Attendance, Classroom
 
 
+
 class LessonScheduler:
     def __init__(self, session, timezone_str='Europe/Bratislava'):
         self.session = session
         self.timezone = pytz.timezone(timezone_str)
         self.scheduler = BackgroundScheduler(timezone=self.timezone)
-        self.current_lesson_id = None  # Track the last scheduled lesson
+        self.current_lesson_id = None
 
     def start(self, classroom_id):
         # Periodically check and schedule the next lesson every minute

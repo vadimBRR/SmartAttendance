@@ -15,11 +15,11 @@ import paho.mqtt.client as mqtt
 from paho.mqtt.client import MQTTMessage
 import json
 
-from models import Notification, Settings
+from src.models import Notification, Settings
 from src.database.database_config import DatabaseConfig
 from src.sheduler import LessonScheduler
 
-load_dotenv('../local.env')
+load_dotenv('local.env')
 
 settings = Settings()
 logger.debug(settings)
@@ -39,6 +39,19 @@ def send_to_fastapi(data):
         logger.info(f"Successfully sent data to FastAPI: {response.json()}")
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to send data to FastAPI: {e}")
+
+# def get_from_fastapi(endpoint):
+#     url = f"{FASTAPI_URL}/{endpoint}"
+#     try:
+#         response = requests.get(url)
+#         response.raise_for_status()
+#         data = response.json()
+#         logger.info(f"Successfully fetched data from FastAPI: {data}")
+#         return data
+#     except requests.exceptions.RequestException as e:
+#         logger.error(f"Failed to fetch data from FastAPI: {e}")
+#         return None
+#
 
 
 def on_connect(client: mqtt.Client, userdata, flags, reason_code, properties):

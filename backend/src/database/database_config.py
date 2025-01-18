@@ -21,7 +21,7 @@ class DatabaseConfig:
 
         # self.engine = create_engine(database_url, echo=True)
         # self.Session = sessionmaker(bind=self.engine)
-        
+
         # base_dir = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
         # root_dir = os.path.join(base_dir, "../")  # Navigate to the root directory
         # db_path = os.path.join(root_dir, 'uni_attendance.db')  # Database file path at root
@@ -33,3 +33,88 @@ class DatabaseConfig:
     def init_db(self):
         Base.metadata.create_all(bind=self.engine)
         # self.populate_database()
+
+    # def populate_database(self):
+    #     """Populate the database with sample data."""
+    #     session = self.Session()
+    #     try:
+    #         # Clear existing data
+    #         session.query(Attendance).delete()
+    #         session.query(Lesson).delete()
+    #         session.query(Classroom).delete()
+    #         session.query(Student).delete()
+    #         session.query(Teacher).delete()
+    #         session.query(Course).delete()
+    #
+    #         # Add classrooms
+    #         classroom1 = Classroom(name="Room A", number="101")
+    #         classroom2 = Classroom(name="Room B", number="102")
+    #         session.add_all([classroom1, classroom2])
+    #
+    #         # Add courses
+    #         course1 = Course(name="Math 101", short_name="MATH101")
+    #         course2 = Course(name="History 202", short_name="HIST202")
+    #         session.add_all([course1, course2])
+    #
+    #         # Add teachers
+    #         teacher1 = Teacher(name="Alice Smith")
+    #         teacher2 = Teacher(name="Bob Johnson")
+    #         teacher1.courses.append(course1)
+    #         teacher2.courses.append(course2)
+    #         session.add_all([teacher1, teacher2])
+    #
+    #         # Add students
+    #         student1 = Student(id= 1, name="John Doe", email="john@example.com")
+    #         student2 = Student(id = 2, name="Jane Roe", email="jane@example.com")
+    #         student1.courses.extend([course1, course2])
+    #         student2.courses.append(course1)
+    #         session.add_all([student1, student2])
+    #
+    #         # Add lessons
+    #         lesson1 = Lesson(
+    #             course=course1,
+    #             teacher=teacher1,
+    #             classroom=classroom1,
+    #             day_of_week="Monday",
+    #             start_time=time(9, 0),
+    #             finish_time=time(10, 0)
+    #         )
+    #         lesson2 = Lesson(
+    #             course=course2,
+    #             teacher=teacher2,
+    #             classroom=classroom2,
+    #             day_of_week="Tuesday",
+    #             start_time=time(10, 30),
+    #             finish_time=time(11, 30)
+    #         )
+    #         session.add_all([lesson1, lesson2])
+    #
+    #         # Link students to lessons
+    #         lesson1.students.append(student1)
+    #         lesson2.students.extend([student1, student2])
+    #
+    #         # Add attendance records
+    #         attendance1 = Attendance(
+    #             student=student1,
+    #             lesson=lesson1,
+    #             week_number=1,
+    #             arrival_time=datetime(2025, 1, 15, 8, 55),
+    #             present=True
+    #         )
+    #         attendance2 = Attendance(
+    #             student=student2,
+    #             lesson=lesson2,
+    #             week_number=1,
+    #             arrival_time=datetime(2025, 1, 16, 10, 25),
+    #             present=True
+    #         )
+    #         session.add_all([attendance1, attendance2])
+    #
+    #         session.commit()
+    #         print("Database populated successfully!")
+    #     except Exception as e:
+    #         session.rollback()
+    #         print(f"An error occurred: {e}")
+    #     finally:
+    #         session.close()
+
