@@ -20,7 +20,6 @@ from passlib.context import CryptContext
 app = FastAPI()
 
 
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -190,12 +189,30 @@ async def post_lesson_attendance(
         lesson_id: int,
         week_number: int,
         student_id: int,
+        present: bool or None,
+        arrival_time: datetime or None,
+        session: Session = Depends(get_db)
 ):
     try:
-        manager.add_attendance(lesson_id=lesson_id, week_number=week_number, student_id=student_id)
-        return {"status": "attendance added successfully"}
+        attendance = session.query(Attendance) \
+            .filter(Attendance.lesson_id == lesson_id) \
+            .filter(Attendance.week_number == week_number) \
+            .filter(Attendance.student_id == student_id) \
+            .first()
+        if arrival_time is None:
+            lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
+            attendance.arrival_time = lesson.start_time
+        else:
+            attendance.arrival_time = arrival_time
+
+        attendance.present = present
+        session.commit()
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Failed to record attendance: {e}")
+        session.rollback()
+    finally:
+        session.close()
 
 from typing import Literal
 
