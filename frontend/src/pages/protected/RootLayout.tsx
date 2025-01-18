@@ -16,7 +16,7 @@ const RootLayout = () => {
 			<section className='flex-1 h-full w-full px-2 my-5'>
 				<Outlet />
 			</section>
-			<Footer />
+			{/* <Footer /> */}
 		</div>
 	)
 }
