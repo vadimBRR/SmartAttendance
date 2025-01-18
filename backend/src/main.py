@@ -273,9 +273,7 @@ class LessonRequest(BaseModel):
 @app.post("/add_lesson/")
 async def add_lesson(lesson_request: LessonRequest, session: Session = Depends(get_db)):
     try:
-        if not __is_valid_day_format(lesson_request.day_of_week):
-            raise HTTPException(status_code=400,
-                                detail=f"'{lesson_request.day_of_week}' is not a valid day format.")
+        __validate_lesson_request(lesson_request, session)
 
         start_time = lesson_request.start_time or datetime.now().time()
         finish_time = lesson_request.finish_time or (
@@ -386,6 +384,17 @@ def __add_students_to_lesson(lesson: Lesson, students_info: list, start_time, fi
                                         detail=f"Student ID {student_info.student_id} has a schedule conflict. Skipping assignment.")
 
                 student.lessons.append(lesson)
+
+                is_assigned = session.query(student_courses).filter(
+                    student_courses.c.course_id == lesson.course_id,
+                    student_courses.c.student_id == student.id
+                ).first()
+
+                if not is_assigned:
+                    session.execute(
+                        student_courses.insert().values(course_id=lesson.course_id, student_id=student.id)
+                    )
+
                 session.commit()
                 added_students.append(student)
                 # session.commit()
@@ -545,7 +554,7 @@ def __validate_lesson(lesson_request: LessonRequest, session: Session):
     if lesson_request.start_time >= lesson_request.finish_time:
         raise ValueError("Start time must be earlier than finish time.")
 
-    if not __is_valid_day_format(lesson_request.created_at):
+    if not __is_valid_day_format(lesson_request.day_of_week):
         raise ValueError(f"'{lesson_request.day_of_week}' is not a valid day format.")
 
     classroom_collisions = session.query(Lesson).filter(
