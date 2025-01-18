@@ -1,3 +1,4 @@
+import logging
 import os
 
 from dotenv import set_key, load_dotenv
@@ -11,8 +12,14 @@ from datetime import time, datetime, timedelta
 from http.client import HTTPException
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from typing import Generator
 
 from src.database.models import student_courses, student_lessons
+
+from src.database.models import Course
+
+from src.database.models import teacher_courses
 
 app = FastAPI()
 
@@ -31,43 +38,37 @@ app.add_middleware(
   allow_headers=["*"]
   )
 
+import json
+
+def load_config():
+    with open('config.json', 'r') as config_file:
+        config = json.load(config_file)
+    return config
+
+config = load_config()
+START_DATE = config['START_DATE']
+
 db_config = DatabaseConfig()
 db_config.init_db()
 # db = db_config.populate_database()
 manager = AttendanceManager(db_config)
 
-load_dotenv('../local.env')
-START_DATE = os.getenv('START_DATE')
-# if not start_date:
-#     start_date = datetime.now().date()  # Current date
-#     set_key('../local.env', 'START_DATE', start_date.isoformat())  # Save to .env file
-#     print(f"START_DATE not found. Initialized to {start_date.isoformat()}.")
-# else:
-#     # Parse the existing START_DATE
-#     start_date = datetime.fromisoformat(start_date).date()
+# Check if START_DATE exists and is not None
+if START_DATE:
+    # Convert START_DATE from string to datetime
+    START_DATE = datetime.fromisoformat(START_DATE)
+else:
+    # Define a default START_DATE if it's not set
+    START_DATE = datetime.now()
+    # You might want to log this case or handle it accordingly
+    print(f"START_DATE not found. Initialized to {START_DATE.isoformat()}.")
 
-def get_db():
+def get_db() -> Generator[Session, None, None]:
     session = db_config.Session()
     try:
         yield session
     finally:
         session.close()
-class IdentifierPayload(BaseModel):
-    id: int
-    dt: int
-
-@app.post("/notifications/")
-async def receive_attendance(payload: IdentifierPayload):
-    print(f"Adding id={payload.id} to database with arriving timestamp={payload.id}")
-    manager.add_attendance_by_student_and_time(student_id=payload.id, timestamp=payload.dt)
-
-@app.get("/courses/{teacher_id}")
-async def get_courses(teacher_id: int):
-    return manager.get_all_courses_for_teacher(teacher_id)
-
-@app.get("/lessons/{courses_id}/{teacher_id}")
-async def get_lessons(courses_id: int, teacher_id: int):
-    return manager.get_all_lessons_by_course_teacher(course_id=courses_id, teacher_id=teacher_id)
 
 @app.get("/lessons{lesson_id}/attendance")
 async def get_lessons_attendance(lesson_id: int, session: Session = Depends(get_db)):
@@ -140,9 +141,20 @@ async def receive_attendance(
 @app.get("/courses/{teacher_id}")
 async def get_courses(
     teacher_id: int,
-    attendance_manager: AttendanceManager = Depends(get_attendance_manager)
+    session: Session = Depends(get_db)
 ):
-    return attendance_manager.get_all_courses_for_teacher(teacher_id)
+    courses = session.query(Course).join(
+        teacher_courses,
+        Course.id == teacher_courses.c.course_id
+    ).filter(
+        teacher_courses.c.teacher_id == teacher_id
+    ).all()
+
+    courses_info = [
+        {"id": course.id, "name": course.name, "short_name": course.short_name} for course in courses
+    ]
+
+    return courses_info
 
 @app.get("/lessons/{course_id}/{teacher_id}")
 async def get_lessons(
@@ -177,8 +189,14 @@ async def post_lesson_attendance(
 
 
 class AttendanceInfo(BaseModel):
-    present: List[bool | None]
-    arrival_time: List[datetime | None]
+    present: List[Optional[bool]]
+    arrival_time: List[Optional[datetime]]
+
+    class Config:
+        arbitrary_types_allowed = True
+
+AttendanceInfo.model_rebuild()
+
 class StudentInfo(BaseModel):
     student_id: int
     name: str
@@ -191,6 +209,8 @@ class LessonRequest(BaseModel):
     day_of_week: str
     start_time: time
     finish_time: time
+    teacher_id: int
+    classroom_id: int
 
 @app.post("/add_lesson/")
 async def add_lesson(lesson_request: LessonRequest):
@@ -198,11 +218,7 @@ async def add_lesson(lesson_request: LessonRequest):
     try:
         start_time = lesson_request.start_time or datetime.now().time()
         finish_time = lesson_request.finish_time or (datetime.combine(datetime.today(), start_time) + timedelta(minutes=1)).time()
-        for student in lesson_request.students:
-            for attendance in student.attendance:
-                attendance.arrival_time = [
-                    time or datetime.now() for time in attendance.arrival_time
-                ]
+        current_week = __get_current_week(lesson_request.created_at)
 
         conflicting_lessons = session.query(Lesson).filter(
             Lesson.day_of_week == lesson_request.day_of_week,
@@ -223,9 +239,11 @@ async def add_lesson(lesson_request: LessonRequest):
             finish_time=finish_time
         )
         session.add(lesson)
+        session.flush()  # Flush to obtain the ID of the new lesson, assuming it is generated by the database
 
         # Add students to the lesson and create attendance records
         all_week_attendances = []
+        added_students = []
         for student_l in lesson_request.students:
             student = session.query(Student).filter_by(id=student_l.student_id).one_or_none()
             if student:
@@ -242,19 +260,14 @@ async def add_lesson(lesson_request: LessonRequest):
 
                 # Assign student to the lesson
                 student.lessons.append(lesson)
-
-                current_week = get_current_week(lesson_request.created_at) # Assuming `current_week_num` is calculated elsewhere
+                added_students.append({"student_id": student.id, "student_name": student.name})
 
                 for week in range(1, 14):  # Loop through weeks 1 to 13
                     if week < current_week:
                         # Fetch attendance data for past weeks
-                        if week - 1 < len(student_l.attendance):
-                            attendance_data = student_l.attendance[week - 1]
-                            arrival_time = attendance_data.arrival_time
-                            present = attendance_data.present
-                        else:
-                            arrival_time = None
-                            present = None
+                        attendance_data = student_l.attendance[week - 1] if week - 1 < len(student_l.attendance) else None
+                        arrival_time = attendance_data.arrival_time[0] if attendance_data and attendance_data.arrival_time else start_time
+                        present = attendance_data.present[0] if attendance_data and attendance_data.present else None
                     else:
                         # Current or future weeks
                         arrival_time = None
@@ -264,8 +277,8 @@ async def add_lesson(lesson_request: LessonRequest):
                         student=student,
                         lesson=lesson,
                         week_number=week,
-                        arrival_time=arrival_time,  # Set arrival time
-                        present=present  # Set attendance status
+                        arrival_time=arrival_time,
+                        present=present
                     )
                     all_week_attendances.append(attendance)
 
@@ -273,7 +286,21 @@ async def add_lesson(lesson_request: LessonRequest):
         session.add_all(all_week_attendances)
         session.commit()
 
-        return {"message": "Lesson and attendance added successfully!", "lesson_id": lesson.id}
+        # Construct the detailed return message
+        return {
+            "message": "Lesson and attendance added successfully!",
+            "lesson_id": lesson.id,
+            "lesson_details": {
+                "course_id": lesson.course_id,
+                "teacher_id": lesson.teacher_id,
+                "classroom_id": lesson.classroom_id,
+                "day_of_week": lesson.day_of_week,
+                "start_time": str(lesson.start_time),
+                "finish_time": str(lesson.finish_time)
+            },
+            "added_students": added_students,
+            "current_week": current_week
+        }
 
     except HTTPException as e:
         session.rollback()
@@ -285,39 +312,37 @@ async def add_lesson(lesson_request: LessonRequest):
         session.close()
 
 
-@app.get("/create_group}")
-async def get_all_students_without_group(course_id: int, session: Session = Depends()):
-    students = (
-        session.query(Student)
-        .join(student_courses, Student.id == student_courses.c.student_id)
-        .outerjoin(student_lessons, Student.id == student_lessons.c.student_id)
-        .filter(
-            student_courses.c.course_id == course_id,
-            student_lessons.c.student_id.is_(None)
-        )
-        .all()
+
+@app.get("/create_group")
+async def get_all_students_without_group(course_id: int, session: Session = Depends(get_db)):
+    query = session.query(Student).join(
+        student_courses,
+        Student.id == student_courses.c.student_id
+    ).filter(
+        student_courses.c.course_id == course_id
     )
 
-    students_info = []
-    for student in students:
-        students_info.append(
-            {
-                "id": student.id,
-                "name": student.name,
-                "email": student.email
-            }
-        )
+    subquery = session.query(Lesson.id).filter(Lesson.course_id == course_id).subquery()
+    students = query.outerjoin(
+        student_lessons,
+        (Student.id == student_lessons.c.student_id) & (student_lessons.c.lesson_id.in_(subquery))
+    ).filter(
+        student_lessons.c.lesson_id.is_(None)
+    ).all()
+
+    students_info = [
+        {"id": student.id, "name": student.name, "email": student.email}
+        for student in students
+    ]
 
     return students_info
 
-def get_current_week(self, current_date=None):
+
+from datetime import datetime, timedelta
+
+
+def __get_current_week(current_date=None):
     if current_date is None:
         current_date = datetime.now()
-    delta = current_date.date() - START_DATE.date()
-    if delta.days < 0:
-        return 0  # Before the start date
 
-    adjust_start = (7 - START_DATE.weekday()) % 7
-    adjusted_start_date = START_DATE + timedelta(days=adjust_start)
-    full_weeks = (current_date.date() - adjusted_start_date.date()).days // 7
-    return full_weeks + 1
+    return current_date.isocalendar()[1] - START_DATE.isocalendar()[1] + 1

@@ -38,15 +38,17 @@ class Course(Base):
     __tablename__ = 'courses'
     id = Column(Integer, primary_key=True)
     name = Column(String)
+    short_name = Column(String)
     lessons = relationship("Lesson", back_populates="course")
     teachers = relationship("Teacher", secondary=teacher_courses, back_populates="courses")
+    students = relationship('Student', secondary=student_courses, back_populates='courses')
 
 
 class Teacher(Base):
     __tablename__ = 'teachers'
     id = Column(Integer, primary_key=True)
     name = Column(String)
-    short_course_day = Column(String)
+    # short_course_day = Column(String)
     lessons = relationship("Lesson", back_populates="teacher")
     courses = relationship("Course", secondary=teacher_courses, back_populates="teachers")
 
@@ -85,3 +87,4 @@ class Attendance(Base):
     present = Column(Boolean, nullable=True)  # True for present, False for absent, NULL for not recorded
     student = relationship("Student", back_populates="attendances")
     lesson = relationship("Lesson", back_populates="attendances")
+
