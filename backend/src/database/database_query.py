@@ -166,3 +166,34 @@ def get_classroom_by_name(classroom_id: int, session = None):
         return
 
     return session.query(Classroom).filter(Classroom.id == classroom_id).first()
+
+def get_all_classrooms(session = None):
+    if not session:
+        return
+    return session.query(Classroom).all()
+
+def get_classroom_name(classroom_id: int, session = None):
+    if not session:
+        return
+    return session.query(Classroom.name).filter(Classroom.id == classroom_id).first()
+
+def get_teacher_by_email(email: str, session = None):
+    if not session:
+        return
+    return session.query(Teacher).filter(Teacher.email == email).first()
+
+def get_teacher_by_id(id: int, session = None):
+    if not session:
+        return
+    return session.query(Teacher).filter(Teacher.id == id).first()
+
+
+def get_student_by_email(email: str, session = None):
+    if not session:
+        return
+    return session.query(Student).filter(Student.email == email).first()
+
+def get_student_by_id(id: int, session = None):
+    if not session:
+        return
+    return session.query(Student).filter(Student.id == id).first()

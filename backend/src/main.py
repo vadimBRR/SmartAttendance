@@ -22,6 +22,8 @@ from src.config_file import update_config_file, read_config_key
 
 from src.database.database_query import get_classroom_by_name
 
+from backend.src.database.database_query import get_all_classrooms, get_classroom_name
+
 app = FastAPI()
 
 
@@ -885,24 +887,30 @@ def __get_date_details(unix_timestamp):
     }
 
 @app.post('/change-classroom')
-async def change_classroom(classroom_id: str,
+async def change_classroom(classroom_id: int,
                      session: Session = Depends(get_db)):
-    update_config_file(file_path='config.json', key='CLASSROOM', value=classroom_id)
-    classroom_name = session.query(Classroom.name).filter(Classroom.id == classroom_id).first()
+    __set_classroom(classroom_id=classroom_id)
+    classroom_name = get_classroom_name(classroom_id=classroom_id)
     # message_queue.put({"type": "classroom_change", "classroom_name": classroom_name})
 
 @app.get('/get-classrooms')
 async def get_classrooms(session: Session = Depends(get_db)):
-    classrooms = session.query(Classroom).all()
+    classrooms = get_all_classrooms(session)
     return [
         {"id": classroom.id, "label": classroom.name}
         for classroom in classrooms
     ]
 @app.get('/get-current-classroom')
 async def get_current_classroom(session: Session = Depends(get_db)):
-    current_classroom = read_config_key(key='CLASSROOM', file_path='config.json')
+    current_classroom = __get_classroom_id()
     classroom = get_classroom_by_name(classroom_id = current_classroom, session=session)
     return {"id": classroom.id, "label": classroom.name}
+
+def __get_classroom_id():
+    return read_config_key(key='CLASROOM_ID', file_path='config.json')
+
+def __set_classroom(classroom_id: int):
+    update_config_file(file_path='config.json', key='CLASROOM_ID', value=classroom_id)
 
 
 
