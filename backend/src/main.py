@@ -6,7 +6,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
 from src.database.database_query import AttendanceManager
 from src.database.database_config import DatabaseConfig
-from datetime import time, datetime, timedelta,timezone
+from datetime import time, datetime, timedelta, timezone, date
 from jose import jwt, JWTError
 
 from typing import List, Optional, Literal,Annotated
@@ -183,7 +183,8 @@ async def post_lesson_attendance(
 ):
     try:
         lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
-        arrival_time = lesson.start_time
+        lesson_date = date.today()
+        arrival_time = datetime.combine(lesson_date, lesson.start_time)
 
         int_to_bool = {
             1: True,
