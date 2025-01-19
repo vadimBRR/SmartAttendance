@@ -94,8 +94,12 @@ async def get_lessons_attendance(lesson_id: int, session: Session = Depends(get_
     try:
         lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
         if not lesson:
-            print(f"No lesson found with ID {lesson_id}")
-            return []
+            raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson_id}")
+            # return []
+        course = session.query(Course).filter(Course.id == lesson.course_id).first()
+        if not course:
+            raise HTTPException(status_code=400, detail=f"No course was found with lesson ID {lesson_id}")
+            # return []
         students = lesson.students
         students_data = []
         for student in students:
@@ -112,6 +116,8 @@ async def get_lessons_attendance(lesson_id: int, session: Session = Depends(get_
             students_data.append({
                 "student_id": student.id,
                 "student_name": student.name,
+                "course_name": course.name,
+                "short_course_name": course.short_name,
                 "attendance": attendance_records
             })
 
