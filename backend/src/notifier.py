@@ -3,6 +3,8 @@ import json
 import os
 from datetime import datetime, timedelta
 import time
+from functools import partial
+
 # from sched import scheduler
 
 import requests
@@ -100,6 +102,10 @@ def handle_identifier(client: mqtt.Client, payload: dict):
     except Exception as e:
         logger.error(f"Failed to process identifier: {e}")
 
+def handle_activity(client: mqtt.Client, command: str):
+    client.publish(f"{NOTIFIER_BASE_TOPIC}/command", f"{command}")
+    logger.debug(f"Sent a command: {command}")
+
 def notify(client: mqtt.Client, payload: dict):
     notification = Notification(**payload)
     apobj = apprise.Apprise()
@@ -169,7 +175,7 @@ def main():
     session = db_config.Session()
 
     # Pass the session instance to the LessonScheduler
-    scheduler = LessonScheduler(session=session)
+    scheduler = LessonScheduler(session=session, handle_activity=partial(handle_activity, client))
 
     # Start the scheduler
     scheduler.start(classroom_id=1)

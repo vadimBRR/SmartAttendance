@@ -688,20 +688,18 @@ async def verify_user_token(token: str):
 async def verify_email(email: str,
                        session: Session = Depends(get_db)):
     try:
-        result = {"id": None, "isTeacher": False}
+        result = {"id": -1, "isTeacher": False}
 
         teacher = session.query(Teacher).filter(Teacher.email == email).first()
         if teacher:
             result["id"] = teacher.id
             result["isTeacher"] = True
-            return result
+        else:
+            student = session.query(Student).filter(Student.email == email).first()
+            if student:
+                result["id"] = student.id
 
-        student = session.query(Student).filter(Student.email == email).first()
-        if student:
-            result["id"] = student.id
-            return result
-
-        raise HTTPException(status_code=404, detail="No such email found.")
+        return result
 
     except Exception as e:
         print(f"Error verifying email: {e}")
@@ -721,16 +719,6 @@ async def get_pico_state():
 import json
 
 def __read_config_key(file_path: str, key: str):
-    """
-    Read a specific key from a JSON config file.
-
-    Args:
-        file_path (str): Path to the config file.
-        key (str): Key to retrieve from the config file.
-
-    Returns:
-        Any: The value associated with the specified key, or None if not found.
-    """
     try:
         with open(file_path, 'r') as file:
             config = json.load(file)
