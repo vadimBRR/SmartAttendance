@@ -706,7 +706,9 @@ def __validate_lesson_request(lesson_request: LessonRequest, session: Session):
 
 @app.get('/delete/lesson_{lesson_id}')
 async def delete_lesson(lesson_id: int, session: Session = Depends(get_db)):
-    result = session.query(Lesson).filter(Lesson.id == lesson_id).delete(synchronize_session='fetch')
+    session.query(Lesson).filter(Lesson.id == lesson_id).delete(synchronize_session='fetch')
+    session.query(Attendance).filter(Attendance.lesson_id == lesson_id).delete(synchronize_session='fetch')
+    session.query(student_lessons).filter(student_lessons.c.lesson_id == lesson_id).delete(synchronize_session='fetch')
     session.commit()
 
       
@@ -833,16 +835,16 @@ async def verify_user_token(token: str):
 async def verify_email(email: str,
                        session: Session = Depends(get_db)):
     try:
-        result = {"id": -1, "isTeacher": False}
+        result = {"id": "-1", "isTeacher": False}
 
         teacher = session.query(Teacher).filter(Teacher.email == email).first()
         if teacher:
-            result["id"] = teacher.id
+            result["id"] = f"{teacher.id}"
             result["isTeacher"] = True
         else:
             student = session.query(Student).filter(Student.email == email).first()
             if student:
-                result["id"] = student.id
+                result["id"] = f"{student.id}"
 
         return result
 
