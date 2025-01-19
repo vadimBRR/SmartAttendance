@@ -32,9 +32,9 @@ FASTAPI_URL = os.getenv('FASTAPI_URL')
 SECRET_KEY = base64.b64decode("NDA0X2JldGFfa2V5MTIzNDU=")
 TIMEZONE = os.getenv('TIMEZONE')
 
-def send_to_fastapi(data):
+def send_to_fastapi(data, url = FASTAPI_URL):
     try:
-        response = requests.post(FASTAPI_URL, json=data)
+        response = requests.post(url, json=data)
         response.raise_for_status()
         logger.info(f"Successfully sent data to FastAPI: {response.json()}")
     except requests.exceptions.RequestException as e:
@@ -119,8 +119,13 @@ def on_message(client: mqtt.Client, userdata, msg: MQTTMessage):
         status = payload.get('status')
         timestamp = payload.get('timestamp')
         if status == "online":
+            __update_config_file(file_path='config.json', key='STATE', value=status)
             logger.info(f"Device is online since {time.localtime(timestamp)}")
         elif status == "offline":
+            __update_config_file(file_path='config.json', key='STATE', value=status)
+            logger.info(f"Device went offline at {time.localtime(timestamp)}")
+        elif status == "sleep":
+            __update_config_file(file_path='config.json', key='STATE', value=status)
             logger.info(f"Device went offline at {time.localtime(timestamp)}")
     elif msg.topic.endswith('/cmd'):
         handle_commands(client, payload)
@@ -128,6 +133,24 @@ def on_message(client: mqtt.Client, userdata, msg: MQTTMessage):
         handle_identifier(client, payload)
     else:
         notify(client, payload)
+
+
+def __update_config_file(file_path: str, key: str, value):
+    try:
+        try:
+            with open(file_path, 'r') as file:
+                config = json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError):
+            config = {}
+
+        config[key] = value
+
+        with open(file_path, 'w') as file:
+            json.dump(config, file, indent=4)
+        print(f"Updated '{key}' in {file_path}")
+    except Exception as e:
+        print(f"Failed to update config file: {e}")
+
 
 
 def main():

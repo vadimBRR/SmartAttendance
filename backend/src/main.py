@@ -1,4 +1,7 @@
 import json
+import os
+
+from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
 from src.database.database_query import AttendanceManager
@@ -43,31 +46,13 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-config_file = "config.json"
-def load_config():
-    try:
-        with open(config_file, 'r') as file:
-            return json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        default_config = {"START_DATE": datetime.now().isoformat(), "STATE": "NORMAL"}
-        with open(config_file, "w") as file:
-            json.dump(default_config, file, indent=4)
-        return default_config
-
-
-config = load_config()
-START_DATE = config['START_DATE']
+load_dotenv('local.env')
+START_DATE = os.getenv('START_DATE')
 
 db_config = DatabaseConfig(echo_flag=False)
 db_config.init_db()
 # db = db_config.populate_database()
 manager = AttendanceManager(db_config)
-
-if START_DATE:
-    START_DATE = datetime.fromisoformat(START_DATE)
-else:
-    START_DATE = datetime.now()
-    print(f"START_DATE not found. Initialized to {START_DATE.isoformat()}.")
 
 def get_db() -> Generator[Session, None, None]:
     session = db_config.Session()
@@ -720,3 +705,41 @@ async def verify_email(email: str,
         raise HTTPException(status_code=500, detail="An error occurred while verifying the email.")
     finally:
         session.close()
+
+@app.get('/get-current-week')
+async def get_current_week():
+    return __get_current_week()
+
+@app.get('/get-pico-status')
+async def get_pico_status():
+   status = __read_config_key(file_path='config.json', key='STATE')
+   return {"status": status}
+
+import json
+
+def __read_config_key(file_path: str, key: str):
+    """
+    Read a specific key from a JSON config file.
+
+    Args:
+        file_path (str): Path to the config file.
+        key (str): Key to retrieve from the config file.
+
+    Returns:
+        Any: The value associated with the specified key, or None if not found.
+    """
+    try:
+        with open(file_path, 'r') as file:
+            config = json.load(file)
+            return config.get(key, None)
+    except FileNotFoundError:
+        print(f"Config file {file_path} not found.")
+        return None
+    except json.JSONDecodeError:
+        print(f"Config file {file_path} is invalid.")
+        return None
+    except Exception as e:
+        print(f"Error reading config file: {e}")
+        return None
+
+
