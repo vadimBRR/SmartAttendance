@@ -57,8 +57,8 @@ class DatabaseConfig:
     #         session.add_all([course1, course2])
     #
     #         # Add teachers
-    #         teacher1 = Teacher(name="Alice Smith")
-    #         teacher2 = Teacher(name="Bob Johnson")
+    #         teacher1 = Teacher(name="Alice Smith", email="alice@example.com")
+    #         teacher2 = Teacher(name="Bob Johnson", email="bob@example.com")
     #         teacher1.courses.append(course1)
     #         teacher2.courses.append(course2)
     #         session.add_all([teacher1, teacher2])

@@ -174,11 +174,11 @@ async def post_lesson_attendance(
         lesson_id: int,
         week_number: int,
         student_id: int,
-        present: bool or None,
-        arrival_time: datetime or None,
+        present: int,
         session: Session = Depends(get_db)
 ):
     try:
+        arrival_time = datetime.now()
         attendance = session.query(Attendance) \
             .filter(Attendance.lesson_id == lesson_id) \
             .filter(Attendance.week_number == week_number) \
@@ -710,8 +710,8 @@ async def verify_email(email: str,
 async def get_current_week():
     return __get_current_week()
 
-@app.get('/get-pico-status')
-async def get_pico_status():
+@app.get('/get-pico-state')
+async def get_pico_state():
    status = __read_config_key(file_path='config.json', key='STATE')
    return {"status": status}
 

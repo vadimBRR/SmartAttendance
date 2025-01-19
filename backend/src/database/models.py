@@ -44,6 +44,7 @@ class Teacher(Base):
     __tablename__ = 'teachers'
     id = Column(Integer, primary_key=True)
     name = Column(String)
+    email = Column(String)
     lessons = relationship("Lesson", back_populates="teacher", cascade="all, delete, delete-orphan")
     courses = relationship("Course", secondary=teacher_courses, back_populates="teachers", cascade="all, delete")
 
