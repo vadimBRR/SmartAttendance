@@ -1,4 +1,3 @@
-import json
 import os
 
 import pytz
@@ -18,8 +17,9 @@ from src.database.models import (student_courses, student_lessons,
                                  teacher_courses, Course, Teacher, Classroom,
                                  Lesson, Student, Attendance, Classroom, User as UserM,Transaction as TransactionM)
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from passlib.context import CryptContext 
-
+from passlib.context import CryptContext
+from src.config_file import read_config_key
+from src.config_file import update_config_file
 
 app = FastAPI()
 
@@ -154,8 +154,14 @@ async def get_lessons_attendance(lesson_id: int, student_id: int, session: Sessi
             Attendance.student_id == student_id
         ).order_by(Attendance.week_number.asc()).all()
 
+        course = session.query(Course).filter(Course.id == lesson.course_id).first()
+
         return [
-                {"present": attendance.present, "arrival_time": attendance.arrival_time}
+                {"present": attendance.present,
+                 "arrival_time": attendance.arrival_time,
+                 "short_course_name": course.short_name,
+                 "course_name": course.name
+                 }
                 for attendance in attendances
             ]
 
@@ -860,25 +866,10 @@ async def get_current_week():
 
 @app.get('/get-pico-state')
 async def get_pico_state():
-   status = __read_config_key(file_path='config.json', key='STATE')
+   status = read_config_key(file_path='config.json', key='STATE')
    return {"status": status}
 
 import json
-
-def __read_config_key(file_path: str, key: str):
-    try:
-        with open(file_path, 'r') as file:
-            config = json.load(file)
-            return config.get(key, None)
-    except FileNotFoundError:
-        print(f"Config file {file_path} not found.")
-        return None
-    except json.JSONDecodeError:
-        print(f"Config file {file_path} is invalid.")
-        return None
-    except Exception as e:
-        print(f"Error reading config file: {e}")
-        return None
 
 
 def __get_date_details(unix_timestamp):
@@ -890,5 +881,14 @@ def __get_date_details(unix_timestamp):
         'week_num': week_num,
         'day_of_week': day_of_week
     }
+
+@app.post('/change-classroom')
+def change_classroom(classroom_id: str,
+                     session: Session = Depends(get_db)):
+    update_config_file(file_path='config.json', key='CLASSROOM', value=classroom_id)
+    classroom_name = session.query(Classroom.name).filter(Classroom.id == classroom_id).first()
+    # message_queue.put({"type": "classroom_change", "classroom_name": classroom_name})
+
+
 
 

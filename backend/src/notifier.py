@@ -1,11 +1,7 @@
 import base64
-import json
 import os
-from datetime import datetime, timedelta
 import time
 from functools import partial
-
-# from sched import scheduler
 
 import requests
 from apprise import apprise
@@ -20,6 +16,8 @@ import json
 from src.models import Notification, Settings
 from src.database.database_config import DatabaseConfig
 from src.sheduler import LessonScheduler
+
+from src.config_file import update_config_file
 
 load_dotenv('local.env')
 
@@ -106,6 +104,7 @@ def handle_activity(client: mqtt.Client, command: str):
     client.publish(f"{NOTIFIER_BASE_TOPIC}/command", f"{command}")
     logger.debug(f"Sent a command: {command}")
 
+
 def notify(client: mqtt.Client, payload: dict):
     notification = Notification(**payload)
     apobj = apprise.Apprise()
@@ -125,13 +124,13 @@ def on_message(client: mqtt.Client, userdata, msg: MQTTMessage):
         status = payload.get('status')
         timestamp = payload.get('timestamp')
         if status == "online":
-            __update_config_file(file_path='config.json', key='STATE', value=status)
+            update_config_file(file_path='config.json', key='STATE', value=status)
             logger.info(f"Device is online since {time.localtime(timestamp)}")
         elif status == "offline":
-            __update_config_file(file_path='config.json', key='STATE', value=status)
+            update_config_file(file_path='config.json', key='STATE', value=status)
             logger.info(f"Device went offline at {time.localtime(timestamp)}")
         elif status == "sleep":
-            __update_config_file(file_path='config.json', key='STATE', value=status)
+            update_config_file(file_path='config.json', key='STATE', value=status)
             logger.info(f"Device went offline at {time.localtime(timestamp)}")
     elif msg.topic.endswith('/cmd'):
         handle_commands(client, payload)
@@ -139,23 +138,6 @@ def on_message(client: mqtt.Client, userdata, msg: MQTTMessage):
         handle_identifier(client, payload)
     else:
         notify(client, payload)
-
-
-def __update_config_file(file_path: str, key: str, value):
-    try:
-        try:
-            with open(file_path, 'r') as file:
-                config = json.load(file)
-        except (FileNotFoundError, json.JSONDecodeError):
-            config = {}
-
-        config[key] = value
-
-        with open(file_path, 'w') as file:
-            json.dump(config, file, indent=4)
-        print(f"Updated '{key}' in {file_path}")
-    except Exception as e:
-        print(f"Failed to update config file: {e}")
 
 
 
