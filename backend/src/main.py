@@ -47,7 +47,11 @@ app.add_middleware(
 )
 
 load_dotenv('local.env')
-START_DATE = os.getenv('START_DATE')
+try:
+    START_DATE = datetime.fromisoformat(os.getenv('START_DATE'))
+except Exception as e:
+    print(f"Invalid START_DATE format. Using current datetime instead. Error: {e}")
+    START_DATE = datetime.now()
 
 db_config = DatabaseConfig(echo_flag=False)
 db_config.init_db()
