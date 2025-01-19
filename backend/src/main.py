@@ -114,7 +114,7 @@ async def get_lessons_attendance(lesson_id: int, session: Session = Depends(get_
             ]
 
             students_data.append({
-                "student_id": student.id,
+                "student_id": f"{student.id}",
                 "student_name": student.name,
                 "course_name": course.name,
                 "short_course_name": course.short_name,
