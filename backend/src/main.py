@@ -1,6 +1,7 @@
 import json
 import os
 
+import pytz
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
@@ -64,8 +65,28 @@ def get_db() -> Generator[Session, None, None]:
         yield session
     finally:
         session.close()
-def get_attendance_manager(db: Session = Depends(get_db)):
-    return AttendanceManager(db_config=db_config)
+
+# Event handlers
+# @app.on_event("startup")
+# async def on_startup():
+#     print("Application is starting...")
+#     global manager
+#     try:
+#         db_config.init_db()
+#         print("Database initialized.")
+#         print(f"START_DATE: {START_DATE}")
+#     except Exception as e:
+#         print(f"Error during startup: {e}")
+#
+# @app.on_event("shutdown")
+# async def on_shutdown():
+#     print("Application is shutting down...")
+#     try:
+#         db_config.close_session()
+#         # __update_config_file(file_path='config.json', key='STATE', value='offline')
+#         print("Resources cleaned up and state updated.")
+#     except Exception as e:
+#         print(f"Error during shutdown: {e}")
 
 
 @app.get("/lessons{lesson_id}/attendance")
@@ -103,6 +124,41 @@ async def get_lessons_attendance(lesson_id: int, session: Session = Depends(get_
         session.close()
 
 
+@app.get("/lessons{lesson_id}/attendance/{student_id}")
+async def get_lessons_attendance(lesson_id: int, student_id: int, session: Session = Depends(get_db)):
+    try:
+        lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
+        if not lesson:
+            raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson_id}")
+
+        student = session.query(Student).filter(Student.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=400, detail=f"No such studentwith ID {student_id} in db.")
+
+        connection_exists = session.query(student_lessons).filter(
+            student_lessons.c.lesson_id == lesson_id,
+            student_lessons.c.student_id == student_id
+        ).first()
+        if not connection_exists:
+            raise HTTPException(status_code=400, detail=f"Student with ID {student_id} does not have lesson with ID {lesson_id}.")
+
+
+        attendances = session.query(Attendance).filter(
+            Attendance.lesson_id == lesson_id,
+            Attendance.student_id == student_id
+        ).order_by(Attendance.week_number.asc()).all()
+
+        return [
+                {"present": attendance.present, "arrival_time": attendance.arrival_time}
+                for attendance in attendances
+            ]
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="An unexpected error occurred.")
+    finally:
+        session.close()
+
+
 class IdentifierPayload(BaseModel):
     id: int
     dt: int
@@ -110,13 +166,46 @@ class IdentifierPayload(BaseModel):
 @app.post("/notifications/")
 async def receive_attendance(
         payload: IdentifierPayload,
-        attendance_manager: AttendanceManager = Depends(get_attendance_manager)
+        session: Session = Depends(get_db)
 ):
-    print(f"Adding id={payload.id} to database with arriving timestamp={payload.dt}")
-    attendance_manager.add_attendance_by_student_and_time(
-        student_id=payload.id, timestamp=payload.dt
-    )
-    return {"status": "success", "student_id": payload.id}
+    try:
+        date_info = __get_date_details(payload.dt)  # Use payload instead of IdentifierPayload
+        if not payload.id or payload.dr:
+            raise HTTPException(status_code=400, detail="Error during reading ISIC.")
+
+        week_num = date_info['week_num'][1]
+
+        arrival_time = date_info['arrival_time']
+        day_of_week = date_info['day_of_week']
+
+        lesson_id = session.query(Lesson.id).filter(
+            Lesson.classroom_id == 1,
+            Lesson.day_of_week == day_of_week,
+            Lesson.start_time - timedelta(minutes=10) <= arrival_time,
+            Lesson.finish_time > arrival_time
+        ).first()
+
+        if not lesson_id:
+            raise HTTPException(status_code=404, detail="There is no lesson right now.")
+
+        lesson_id = lesson_id[0]  # Extract the lesson ID
+
+        await post_lesson_attendance(
+            lesson_id=lesson_id,
+            week_number=week_num,
+            student_id=payload.id,
+            present=True
+        )
+
+        session.commit()
+        return {"status": "success", "student_id": payload.id}
+
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to record attendance: {str(e)}")
+    finally:
+        session.close()
+
 
 
 @app.get("/courses/{teacher_id}")
@@ -170,6 +259,43 @@ async def get_lessons_by_teacher(
 
     finally:
         session.close()
+
+
+@app.get("/lessons/student/{student_id}")
+async def get_lessons_by_student(
+        student_id: int,
+        session: Session = Depends(get_db)
+):
+    try:
+        lessons = session.query(Lesson).filter(
+            Lesson.id.in_(
+                session.query(student_lessons.c.lesson_id).filter(student_lessons.c.student_id == student_id)
+            )
+        ).all()
+
+        result = {}
+        for lesson in lessons:
+            course = session.query(Course).filter(
+                Course.id == lesson.course_id
+            ).first()
+
+            if course:
+                result[lesson.id] = {
+                    "course_name": course.name,
+                    "short_course_name": course.short_name,
+                    "day_of_week": lesson.day_of_week,
+                    "start_time": str(lesson.start_time),
+                    "finish_time": str(lesson.finish_time)
+                }
+        return {"lessons": result}
+
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+        return {"lessons": []}
+
+    finally:
+        pass
+        # session.close()
 
 
 
@@ -738,5 +864,16 @@ def __read_config_key(file_path: str, key: str):
     except Exception as e:
         print(f"Error reading config file: {e}")
         return None
+
+
+def __get_date_details(unix_timestamp):
+    arrival_time = datetime.fromtimestamp(unix_timestamp)
+    week_num = __get_current_week(arrival_time)
+    day_of_week = datetime.now(pytz.timezone('Europe/Bratislava')).strftime('%A')
+    return {
+        'arrival_time': arrival_time,
+        'week_num': week_num,
+        'day_of_week': day_of_week
+    }
 
 
