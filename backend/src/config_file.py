@@ -1,7 +1,7 @@
 import json
 
 
-def read_config_key(file_path: str, key: str):
+def read_config_key(key: str, file_path="config.json"):
     try:
         with open(file_path, 'r') as file:
             config = json.load(file)
@@ -32,3 +32,27 @@ def update_config_file(file_path: str, key: str, value):
         print(f"Updated '{key}' in {file_path}")
     except Exception as e:
         print(f"Failed to update config file: {e}")
+
+def get_classroom_id() -> int:
+    return read_config_key(key='CLASROOM_ID', file_path='config.json')
+
+def set_classroom(classroom_id: int):
+    update_config_file(file_path='config.json', key='CLASROOM_ID', value=classroom_id)
+
+def get_teacher_id() -> int:
+    return read_config_key(key='TEACHER_ID', file_path='config.json')
+
+def set_teacher_id(teacher_id: int):
+    update_config_file(file_path='config.json', key='TEACHER_ID', value=teacher_id)
+
+def get_start_date() -> str:
+    return read_config_key(key='START_DATE', file_path='config.json')
+
+def set_start_date(start_date: str):
+    update_config_file(file_path='config.json', key='START_DATE', value=start_date)
+
+def get_state() -> str:
+    return read_config_key(key='STATE', file_path='config.json')
+
+def set_state(state: str):
+    update_config_file(file_path='config.json', key='STATE', value=state)
