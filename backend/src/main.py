@@ -178,19 +178,22 @@ async def post_lesson_attendance(
         session: Session = Depends(get_db)
 ):
     try:
-        arrival_time = datetime.now()
+        lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
+        arrival_time = lesson.start_time
+
+        int_to_bool = {
+            1: True,
+            2: False,
+            3: None
+        }
+        present_value = int_to_bool.get(present, None)
         attendance = session.query(Attendance) \
             .filter(Attendance.lesson_id == lesson_id) \
             .filter(Attendance.week_number == week_number) \
             .filter(Attendance.student_id == student_id) \
             .first()
-        if arrival_time is None:
-            lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
-            attendance.arrival_time = lesson.start_time
-        else:
-            attendance.arrival_time = arrival_time
 
-        attendance.present = present
+        attendance.present = present_value
         session.commit()
 
     except Exception as e:
