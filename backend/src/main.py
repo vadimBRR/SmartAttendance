@@ -198,6 +198,7 @@ async def post_lesson_attendance(
             .first()
 
         attendance.present = present_value
+        attendance.arrival_time = arrival_time
         session.commit()
 
     except Exception as e:
