@@ -363,7 +363,7 @@ async def get_all_students_without_course(course_id: int, session: Session = Dep
     ).all()
 
     students_info = [
-        {"id": student.id, "name": student.name, "email": student.email}
+        {"id": f"{student.id}", "name": student.name, "email": student.email}
         for student in students
     ]
 
@@ -702,6 +702,13 @@ def __validate_lesson_request(lesson_request: LessonRequest, session: Session):
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get('/delete/lesson_{lesson_id}')
+async def delete_lesson(lesson_id: int, session: Session = Depends(get_db)):
+    result = session.query(Lesson).filter(Lesson.id == lesson_id).delete(synchronize_session='fetch')
+    session.commit()
+
       
       
       

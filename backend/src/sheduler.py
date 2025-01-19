@@ -14,6 +14,7 @@ class LessonScheduler:
         self.env_path = env_path
         self.handle_activity = handle_activity
         self.current_lesson_id = None
+        self.time_before_lesson = 10
 
 
         # Load the .env file
@@ -27,9 +28,6 @@ class LessonScheduler:
         print(f"Starting program with week number: {self.current_week_num}")
 
     def start(self, classroom_id):
-        """
-        Start the scheduler and periodically check for the next lesson every minute.
-        """
         # Schedule a job to check for the next lesson
         self.scheduler.add_job(self.check_and_schedule_next_lesson, 'interval', minutes=1, args=[classroom_id])
 
@@ -42,15 +40,9 @@ class LessonScheduler:
         self.scheduler.start()
 
     def shutdown(self):
-        """
-        Shut down the scheduler gracefully.
-        """
         self.scheduler.shutdown()
 
     def get_start_date_from_env(self):
-        """
-        Load the start date from the .env file. If it doesn't exist, default to today and write it to .env.
-        """
         start_date_str = os.getenv('START_DATE')
         if not start_date_str:
             # If no start date exists in .env, initialize it with today's date
@@ -63,18 +55,12 @@ class LessonScheduler:
         return start_date
 
     def calculate_week_number(self):
-        """
-        Calculate the current week number based on the start date.
-        """
         today = datetime.now(self.timezone).date()
         delta = today - self.start_date
         week_num = delta.days // 7 + 1  # Week number starts from 1
         return week_num
 
     def update_week_number(self):
-        """
-        Update the current week number based on the start date and write it to the .env file.
-        """
         self.current_week_num = self.calculate_week_number()
         print(f"Updating week number to: {self.current_week_num}")
 
@@ -86,9 +72,6 @@ class LessonScheduler:
             print(f"Error updating week number in .env file: {e}")
 
     def get_next_lesson(self, classroom_id):
-        """
-        Get the next lesson for the current day in the specified classroom.
-        """
         current_time = datetime.now(self.timezone).time()
         today = datetime.now(self.timezone).strftime('%A')
         print(f"Fetching next lesson for classroom ID {classroom_id}. Current time: {current_time}, Day: {today}")
@@ -111,9 +94,6 @@ class LessonScheduler:
         return next_lesson
 
     def check_and_schedule_next_lesson(self, classroom_id):
-        """
-        Periodically checks for the next lesson and schedules jobs if not already scheduled.
-        """
         next_lesson = self.get_next_lesson(classroom_id)
 
         if not next_lesson:
@@ -130,23 +110,28 @@ class LessonScheduler:
         self.current_lesson_id = next_lesson.id  # Update the current lesson tracker
 
     def schedule_lesson_jobs(self, lesson):
-        """
-        Schedules notifications and absence marking for the given lesson.
-        """
         print(f"Scheduling jobs for lesson ID {lesson.id}.")
+        if lesson.course_id == 404:
+            self.__set_time_before_lesson(0)
+            print("TEST!!!")
+        else:
+            time_before = self.__check_how_much_time_before_lesson(lesson)
+            if time_before <= 10:
+                self.__set_time_before_lesson(time_before)
+            else:
+                self.__set_time_before_lesson(10)
 
-        # Create timezone-aware datetime objects
+
+
         lesson_start_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.start_time))
-        start_notification_time = lesson_start_datetime - timedelta(minutes=10)
+        start_notification_time = lesson_start_datetime - timedelta(minutes=self.time_before_lesson)
         # start_notification_time = lesson_start_datetime
 
-        # Schedule start notification
         if datetime.now(self.timezone) < start_notification_time:
             self.scheduler.add_job(
                 self.send_notification, 'date', run_date=start_notification_time, args=[lesson, 'start']
             )
 
-        # Create timezone-aware end datetime
         lesson_end_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.finish_time))
         self.scheduler.add_job(
             self.send_notification, 'date', run_date=lesson_end_datetime, args=[lesson, 'end']
@@ -156,9 +141,6 @@ class LessonScheduler:
         )
 
     def send_notification(self, lesson, action='start'):
-        """
-        Sends notifications for lessons.
-        """
         if action == 'start':
             self.handle_activity("wake_up")
         elif action == 'end':
@@ -168,26 +150,32 @@ class LessonScheduler:
 
 
     def mark_absences_for_lesson(self, lesson_id):
-        """
-        Marks students as absent for a specific lesson after it has ended, considering the current week only.
-        """
         print(f"Marking absences for lesson ID {lesson_id} in week {self.current_week_num}.")
 
-        # Fetch attendance records for this lesson where attendance has not been recorded
         unrecorded_attendances = self.session.query(Attendance).filter(
             Attendance.lesson_id == lesson_id,
-            Attendance.present.is_(None),  # None indicates attendance has not been recorded
-            Attendance.week_number == self.current_week_num  # Only consider the current week
+            Attendance.present.is_(None),
+            Attendance.week_number == self.current_week_num
         ).all()
 
-        # Mark absent for all unrecorded attendances
         for attendance in unrecorded_attendances:
             attendance.present = False  # Mark as absent
             print(f"Marked student {attendance.student_id} as absent for lesson {lesson_id}.")
 
-        # Commit changes to the database
         try:
             self.session.commit()
         except Exception as e:
             print(f"Error committing changes to the database: {e}")
             self.session.rollback()
+
+    def __set_time_before_lesson(self, time: int):
+        self.time_before_lesson = time
+
+
+    def __check_how_much_time_before_lesson(self, lesson):
+        now = datetime.now()
+        lesson_start_time = datetime.combine(now.date(), lesson.start_time)
+        time_difference = lesson_start_time - now
+        return time_difference if time_difference > timedelta(0) else -1
+
+
