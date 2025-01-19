@@ -4,7 +4,6 @@ import pytz
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
-from src.database.database_query import AttendanceManager
 from src.database.database_config import DatabaseConfig
 from datetime import time, datetime, timedelta, timezone, date
 from jose import jwt, JWTError
@@ -47,6 +46,7 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+
 load_dotenv('local.env')
 try:
     START_DATE = datetime.fromisoformat(os.getenv('START_DATE'))
@@ -57,7 +57,7 @@ except Exception as e:
 db_config = DatabaseConfig(echo_flag=False)
 db_config.init_db()
 # db = db_config.populate_database()
-manager = AttendanceManager(db_config)
+# manager = AttendanceManager(db_config)
 
 def get_db() -> Generator[Session, None, None]:
     session = db_config.Session()
@@ -131,7 +131,7 @@ async def get_lessons_attendance(lesson_id: int, session: Session = Depends(get_
 
 
 @app.get("/lessons{lesson_id}/attendance/{student_id}")
-async def get_lessons_attendance(lesson_id: int, student_id: int, session: Session = Depends(get_db)):
+async def get_lessons_attendance_for_student(lesson_id: int, student_id: int, session: Session = Depends(get_db)):
     try:
         lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
         if not lesson:
@@ -883,12 +883,19 @@ def __get_date_details(unix_timestamp):
     }
 
 @app.post('/change-classroom')
-def change_classroom(classroom_id: str,
+async def change_classroom(classroom_id: str,
                      session: Session = Depends(get_db)):
     update_config_file(file_path='config.json', key='CLASSROOM', value=classroom_id)
     classroom_name = session.query(Classroom.name).filter(Classroom.id == classroom_id).first()
     # message_queue.put({"type": "classroom_change", "classroom_name": classroom_name})
 
+@app.get('/get-classrooms')
+async def get_classrooms(session: Session = Depends(get_db)):
+    classrooms = session.query(Classroom).all()
+    return [
+        {"id": classroom.id, "label": classroom.name}
+        for classroom in classrooms
+    ]
 
 
 
