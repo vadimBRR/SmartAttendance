@@ -18,7 +18,9 @@ from src.database.models import (student_courses, student_lessons,
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from src.config_file import read_config_key
-from src.config_file import update_config_file
+from src.config_file import update_config_file, read_config_key
+
+from src.database.database_query import get_classroom_by_name
 
 app = FastAPI()
 
@@ -896,6 +898,11 @@ async def get_classrooms(session: Session = Depends(get_db)):
         {"id": classroom.id, "label": classroom.name}
         for classroom in classrooms
     ]
+@app.get('/get-current-classroom')
+async def get_current_classroom(session: Session = Depends(get_db)):
+    current_classroom = read_config_key(key='CLASSROOM', file_path='config.json')
+    classroom = get_classroom_by_name(classroom_id = current_classroom, session=session)
+    return {"id": classroom.id, "label": classroom.name}
 
 
 

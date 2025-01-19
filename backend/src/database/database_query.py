@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from http.client import HTTPException
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -7,276 +8,161 @@ from src.database.models import Student, Teacher, Course, Lesson, Attendance, Cl
 
 from src.database.models import teacher_courses
 
-
-class AttendanceManager:
-    def __init__(self, db_config, classroom_name="Solaris", start_date=datetime(2023, 9, 1)):
-        self.db_config = db_config  # DatabaseConfig instance
-        self.classroom_name = classroom_name
-        self.start_date = start_date
-
-    def get_current_week(self, current_date=None):
-        if current_date is None:
-            current_date = datetime.now()
-        delta = current_date.date() - self.start_date.date()
-        if delta.days < 0:
-            return 0  # Before the start date
-
-        adjust_start = (7 - self.start_date.weekday()) % 7
-        adjusted_start_date = self.start_date + timedelta(days=adjust_start)
-        full_weeks = (current_date.date() - adjusted_start_date.date()).days // 7
-        return full_weeks + 1
-
-    def get_date_details(self, unix_timestamp):
-        arrival_time = datetime.fromtimestamp(unix_timestamp)
-        week_num = arrival_time.isocalendar()[1]
-        week_days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-        day_of_week = week_days[arrival_time.weekday()]
-        return {
-            'arrival_time': arrival_time,
-            'week_num': week_num,
-            'day_of_week': day_of_week
-        }
-
-    def get_students_by_lesson(self, lesson_id):
-        session = self.db_config.Session()
-        student_ids = []
-        try:
-            lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
-            if lesson:
-                student_ids = [student.id for student in lesson.students]
-            else:
-                print(f"No lesson found with ID {lesson_id}")
-        except Exception as e:
-            print(f"An error occurred: {str(e)}")
-        finally:
-            session.close()
-        return student_ids
-
-    def get_student_name_by_id(self, student_id):
-        session = self.db_config.Session()
-        student_info = {"student_name": None, "student_surname": None}
-        try:
-            student = session.query(Student).filter(Student.id == student_id).first()
-            if student:
-                student_info["student_name"] = student.name
-                student_info["student_surname"] = student.surname
-            else:
-                print(f"No student found with ID {student_id}")
-        except Exception as e:
-            print(f"An error occurred: {str(e)}")
-        finally:
-            session.close()
-        return student_info
-
-    def get_students_attendance_by_lesson(self, lesson_id):
-        session = self.db_config.Session()
-        try:
-            # Fetch the lesson
-            lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
-            if not lesson:
-                print(f"No lesson found with ID {lesson_id}")
-                return []
-
-            # Get all students for the lesson
-            students = lesson.students
-
-            # Build the response with attendance
-            students_data = []
-            for student in students:
-                # Fetch attendance records for the student in the specified lesson
-                attendances = session.query(Attendance).filter(
-                    Attendance.lesson_id == lesson_id,
-                    Attendance.student_id == student.id
-                ).all()
-
-                # Collect attendance records as a list of dictionaries with present and arrival_time
-                attendance_records = [
-                    {"present": attendance.present, "arrival_time": attendance.arrival_time}
-                    for attendance in attendances
-                ]
-
-                # Add student data to the result
-                students_data.append({
-                    "student_id": student.id,
-                    "student_name": student.name,
-                    "attendance": attendance_records
-                })
-
-            return {"students": students_data}
-
-        except Exception as e:
-            print(f"An error occurred: {str(e)}")
-            return []
-        finally:
-            session.close()
-
-    def get_all_attendances_by_lesson_student(self, lesson_id, student_id):
-        session = self.db_config.Session()
-        student_attendances = []
-        try:
-            student_attendances = session.query(Attendance).filter(Attendance.lesson_id == lesson_id).filter(Attendance.student_id == student_id).all()
-        except Exception as e:
-            print(f"An error occurred: {str(e)}")
-        finally:
-            session.close()
-        return student_attendances
-
-    def get_lesson_id_by_class_time(self, classroom_name, day_of_week, date_time):
-        session = self.db_config.Session()
-        lesson_id = None
-        try:
-            specific_time = date_time.time()
-            lesson = session.query(Lesson.id).join(Classroom).filter(Classroom.name == classroom_name).filter(Lesson.day_of_week == day_of_week).filter(Lesson.start_time <= specific_time).filter(Lesson.finish_time >= specific_time).first()
-            if lesson:
-                lesson_id = lesson[0]
-        except Exception as e:
-            print(f"An error occurred: {str(e)}")
-        finally:
-            session.close()
-        return lesson_id
-
-    def add_attendance(self, student_id, lesson_id, week_number, arrival_time=None):
-        if arrival_time is None:
-            arrival_time = datetime.now()
-
-        session = self.db_config.Session()  # Directly call Session
-        try:
-            attendance = Attendance(
-                student_id=student_id,
-                lesson_id=lesson_id,
-                week_number=week_number,
-                arrival_time=arrival_time,
-                present=True
-            )
-            session.add(attendance)
-            session.commit()
-            print("Attendance recorded successfully.")
-        except IntegrityError as e:
-            print(f"Failed to record attendance: {e}")
-            session.rollback()
-        finally:
-            session.close()
-
-    def set_absence_for_null_records(self):
-        session = self.db_config.Session()
-        try:
-            records_to_update = session.query(Attendance).filter(Attendance.present.is_(None)).all()
-            for record in records_to_update:
-                record.present = False
-            session.commit()
-            print(f"Updated {len(records_to_update)} attendance records to mark as absent.")
-        except Exception as e:
-            session.rollback()
-            print(f"An error occurred: {str(e)}")
-        finally:
-            session.close()
-
-    def add_attendance_by_student_and_time(self, student_id, timestamp):
-        date = self.get_date_details(timestamp)
-        week_num = date['week_num']
-        arrival_time = date['arrival_time']
-        day_of_week = date['day_of_week']
-        lesson_id = self.get_lesson_id_by_class_time(self.classroom_name, day_of_week, arrival_time)
-        self.add_attendance(student_id, lesson_id, week_num, arrival_time)
-
-    def get_all_courses_for_teacher(self, teacher_id):
-        session = self.db_config.Session()
-        try:
-            stmt = (
-                select(Course.id, Course.name)
-                .join(teacher_courses, teacher_courses.c.course_id == Course.id)
-                .where(teacher_courses.c.teacher_id == teacher_id)
-            )
-            results = session.execute(stmt).fetchall()
-
-            courses_dict = {row.id: row.name for row in results}
-            return courses_dict
-        except Exception as e:
-            print(f"An error occurred: {str(e)}")
-            return []
-        finally:
-            session.close()
+from src.database.models import student_lessons
 
 
-    def get_all_lessons_by_course_teacher(self, course_id, teacher_id):
-        session = self.db_config.Session()
-        try:
-            lessons = session.query(Lesson).filter(Lesson.course_id==course_id).filter(Lesson.teacher_id==teacher_id).all()
-            return {
-                lesson.id: {
-                    "day_of_week": lesson.day_of_week,
-                    "start_time": str(lesson.start_time),
-                    "finish_time": str(lesson.finish_time)
-                }
-                for lesson in lessons
-            }
-        except Exception as e:
-            print(f"An error occurred: {str(e)}")
-            return []
-        finally:
-            session.close()
+def get_lesson_attendances(lesson_id: int, session = None):
+    try:
+        lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
+        if not lesson:
+            raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson_id}")
+            # return []
+        course = session.query(Course).filter(Course.id == lesson.course_id).first()
+        if not course:
+            raise HTTPException(status_code=400, detail=f"No course was found with lesson ID {lesson_id}")
+            # return []
+        students = lesson.students
+        students_data = []
+        for student in students:
+            attendances = session.query(Attendance).filter(
+                Attendance.lesson_id == lesson_id,
+                Attendance.student_id == student.id
+            ).order_by(Attendance.week_number.asc()).all()
 
-    def add_new_lesson(self, course_id, teacher_id, classroom_id, day_of_week, students_id: list,
-                       start_time=None, finish_time=None):
-        session = self.db_config.Session()
-        try:
-            # Use current time if no start_time is provided
-            if not start_time:
-                start_time = datetime.now().time()
-            if not finish_time:
-                finish_time = (datetime.combine(datetime.today(), start_time) + timedelta(minutes=5)).time()
+            attendance_records = [
+                {"present": attendance.present, "arrival_time": attendance.arrival_time}
+                for attendance in attendances
+            ]
 
-            # Check for collisions
-            conflicting_lessons = session.query(Lesson).filter(
-                Lesson.day_of_week == day_of_week,
-                (
-                        (Lesson.start_time < finish_time) & (Lesson.finish_time > start_time)
-                # Overlapping time condition
-                ),
-                (
-                        (Lesson.teacher_id == teacher_id) |  # Same teacher
-                        (Lesson.classroom_id == classroom_id)  # Same classroom
-                )
-            ).all()
+            students_data.append({
+                "student_id": f"{student.id}",
+                "student_name": student.name,
+                "course_name": course.name,
+                "short_course_name": course.short_name,
+                "attendance": attendance_records
+            })
 
-            if conflicting_lessons:
-                print(f"Cannot add lesson. Found {len(conflicting_lessons)} conflicting lesson(s):")
-                for conflict in conflicting_lessons:
-                    print(
-                        f" - Conflict with Lesson ID {conflict.id}, Teacher ID {conflict.teacher_id}, Classroom ID {conflict.classroom_id}")
-                return []
+        return {"students": students_data}
 
-            # Create the new lesson
-            lesson = Lesson(course_id=course_id, teacher_id=teacher_id, classroom_id=classroom_id,
-                            day_of_week=day_of_week, start_time=start_time, finish_time=finish_time)
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+        return []
+    finally:
+        session.close()
 
-            # Assign students to the lesson
-            for student_id in students_id:
-                student = session.query(Student).filter_by(id=student_id).one_or_none()
-                if student:
-                    # Check if the student has a collision
-                    student_conflicts = session.query(Lesson).filter(
-                        Lesson.day_of_week == day_of_week,
-                        (Lesson.start_time < finish_time) & (Lesson.finish_time > start_time),
-                        Lesson.students.any(Student.id == student_id)
-                    ).all()
+async def get_lessons_attendance_for_student(lesson_id: int, student_id: int, session = None):
+    try:
+        lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
+        if not lesson:
+            raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson_id}")
 
-                    if student_conflicts:
-                        print(f"Student ID {student_id} has a schedule conflict. Skipping assignment.")
-                        continue
+        student = session.query(Student).filter(Student.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=400, detail=f"No such studentwith ID {student_id} in db.")
 
-                    student.lessons.append(lesson)
+        if not __is_student_have_such_lesson(student_id=student_id, lesson_id=lesson_id):
+            raise HTTPException(status_code=400, detail=f"Student with ID {student_id} does not have lesson with ID {lesson_id}.")
 
-            # Add and commit the lesson
-            session.add(lesson)
 
-            session.commit()
-            print("Lesson added successfully!")
+        attendances = session.query(Attendance).filter(
+            Attendance.lesson_id == lesson_id,
+            Attendance.student_id == student_id
+        ).order_by(Attendance.week_number.asc()).all()
 
-        except Exception as e:
-            session.rollback()
-            print(f"An error occurred: {str(e)}")
-            return []
-        finally:
-            session.close()
+        course = session.query(Course).filter(Course.id == lesson.course_id).first()
 
+        return [
+                {"present": attendance.present,
+                 "arrival_time": attendance.arrival_time,
+                 "short_course_name": course.short_name,
+                 "course_name": course.name
+                 }
+                for attendance in attendances
+            ]
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="An unexpected error occurred.")
+    finally:
+        session.close()
+
+def __is_student_have_such_lesson(lesson_id, student_id, session = None):
+    return session.query(student_lessons).filter(
+        student_lessons.c.lesson_id == lesson_id,
+        student_lessons.c.student_id == student_id
+    ).first()
+
+def __get_lesson_by_lcassroom_moment():
+    pass
+
+# def __validate_attendance(attendance: AttendanceInfo, current_week: int):
+#     if len(attendance.present) < current_week:
+#         raise ValueError(f"Insufficient 'present' data. Expected at least {current_week} entries.")
+#     if len(attendance.arrival_time) < current_week:
+#         raise ValueError(f"Insufficient 'arrival_time' data. Expected at least {current_week} entries.")
+#
+#
+# def __validate_student(student: StudentInfo, lesson_request: LessonRequest, session: Session):
+#     db_student = session.query(Student).filter_by(id=student.student_id).first()
+#     if not db_student:
+#         raise ValueError(f"Student ID {student.student_id} does not exist in the database.")
+#
+#     name_parts = student.name.split()
+#     if len(name_parts) < 2:
+#         raise ValueError(f"Invalid student name format: {student.name}. Expected 'name surname'.")
+#
+#     for attendance in student.attendance:
+#         __validate_attendance(attendance, current_week=len(attendance.present))
+#
+#     student_collisions = session.query(Lesson).join(Lesson.students).filter(
+#         Lesson.day_of_week == lesson_request.day_of_week,
+#         Lesson.students.any(Student.id == student.student_id),  # Student is in the lesson
+#         (Lesson.start_time < lesson_request.finish_time) & (Lesson.finish_time > lesson_request.start_time),
+#     ).all()
+#     if student_collisions:
+#         raise ValueError(
+#             f"Student ID {student.student_id} has a scheduling conflict with {len(student_collisions)} existing lessons.")
+#
+#
+# def __validate_lesson(lesson_request: LessonRequest, session: Session):
+#     if not session.query(Course).filter_by(id=lesson_request.course_id).first():
+#         raise ValueError(f"Course ID {lesson_request.course_id} does not exist in the database.")
+#
+#     if not session.query(Teacher).filter_by(id=lesson_request.teacher_id).first():
+#         raise ValueError(f"Teacher ID {lesson_request.teacher_id} does not exist in the database.")
+#
+#     if not session.query(Classroom).filter_by(id=lesson_request.classroom_id).first():
+#         raise ValueError(f"Classroom ID {lesson_request.classroom_id} does not exist in the database.")
+#
+#     if lesson_request.created_at > datetime.now():
+#         raise ValueError("The 'created_at' timestamp cannot be in the future.")
+#
+#     if lesson_request.start_time >= lesson_request.finish_time:
+#         raise ValueError("Start time must be earlier than finish time.")
+#
+#     if not __is_valid_day_format(lesson_request.day_of_week):
+#         raise ValueError(f"'{lesson_request.day_of_week}' is not a valid day format.")
+#
+#     classroom_collisions = session.query(Lesson).filter(
+#         Lesson.day_of_week == lesson_request.day_of_week,
+#         Lesson.classroom_id == lesson_request.classroom_id,
+#         (Lesson.start_time < lesson_request.finish_time) & (Lesson.finish_time > lesson_request.start_time),
+#     ).all()
+#     if classroom_collisions:
+#         raise ValueError(
+#             f"Schedule collision detected in the classroom with {len(classroom_collisions)} existing lessons.")
+#
+# def __validate_lesson_request(lesson_request: LessonRequest, session: Session):
+#     try:
+#         __validate_lesson(lesson_request, session)
+#
+#         for student in lesson_request.students:
+#             __validate_student(student, lesson_request, session)
+#
+#     except ValueError as e:
+#         raise HTTPException(status_code=400, detail=str(e))
+
+def get_classroom_by_name(classroom_id: int, session = None):
+    if not session:
+        return
+
+    return session.query(Classroom).filter(Classroom.id == classroom_id).first()
