@@ -6,11 +6,11 @@ interface AttendanceTrackerProps {
   onToggle: (week: number) => void;
 }
 
-const AttendanceTracker: React.FC<AttendanceTrackerProps> = ({
+const AttendanceTracker = ({
   weeks,
   currentAttendance,
   onToggle,
-}) => {
+}: AttendanceTrackerProps) => {
   return (
     <div className="flex gap-2">
       {[...Array(weeks)].map((_, weekIndex) => (

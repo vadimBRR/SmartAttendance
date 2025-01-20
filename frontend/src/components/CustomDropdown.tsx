@@ -11,11 +11,11 @@ interface CustomDropdownProps {
   onSelect: (id: number) => void;
 }
 
-const CustomDropdown: React.FC<CustomDropdownProps> = ({
+const CustomDropdown = ({
   options,
   selectedOption,
   onSelect,
-}) => {
+}: CustomDropdownProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (

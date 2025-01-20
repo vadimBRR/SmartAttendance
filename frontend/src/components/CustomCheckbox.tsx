@@ -5,7 +5,7 @@ interface CustomCheckboxProps {
   onChange: () => void;
 }
 
-const CustomCheckbox: React.FC<CustomCheckboxProps> = ({ checked, onChange }) => {
+const CustomCheckbox = ({ checked, onChange }: CustomCheckboxProps) => {
   return (
     <div
       className={`w-6 h-6 flex items-center justify-center rounded-full cursor-pointer transition-all ${

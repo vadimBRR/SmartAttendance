@@ -1,33 +1,48 @@
-import { Route, Routes } from 'react-router-dom';
-import Home from './pages/protected/Home';
-import Navbar from './components/Navbar';
-import Groups from './pages/protected/Groups';
-import Attendance from './pages/protected/Attendance';
-import CreateGroup from './pages/protected/CreateGroup'; // Імпортуємо компонент CreateGroup
-import RootLayout from './pages/protected/RootLayout';
-import SignIn from './pages/auth/SignIn';
-import AuthLayout from './pages/auth/AuthLayout';
+import { Route, Routes } from 'react-router-dom'
+import Groups from './pages/protected/Groups'
+import Attendance from './pages/protected/Attendance'
+import CreateGroup from './pages/protected/CreateGroup'
+import RootLayout from './pages/protected/RootLayout'
+import SignIn from './pages/auth/SignIn'
+import AuthLayout from './pages/auth/AuthLayout'
 import SignUp from './pages/auth/SignUp'
+import { useAuth } from './providers/AuthProvider'
+import GroupsForStudent from './pages/protected/GroupsForStudent'
+import GroupsForUnknown from './pages/protected/GroupsForUnknown'
+import AttendanceStudent from './pages/protected/AttendanceStudent'
 
 function App() {
-  return (
-    <div className='flex h-screen w-full'>
-      <Routes>
-        {/* Авторизаційний макет */}
-        <Route element={<AuthLayout />}>
-          <Route path='/sign-in' element={<SignIn />} />
-          <Route path='/sign-up' element={<SignUp />} />
-        </Route>
+	const { isTeacher, userId } = useAuth()
+	return (
+		<div className='flex h-screen w-full'>
+			<Routes>
+				<Route element={<AuthLayout />}>
+					<Route path='/sign-in' element={<SignIn />} />
+					<Route path='/sign-up' element={<SignUp />} />
+				</Route>
 
-        {/* Основний макет */}
-        <Route element={<RootLayout />}>
-          <Route path='/' element={<Groups />} />
-          <Route path='/attendance/:id' element={<Attendance />} />
-          <Route path='/create-group' element={<CreateGroup />} /> {/* Додано маршрут */}
-        </Route>
-      </Routes>
-    </div>
-  );
+				<Route element={<RootLayout />}>
+					{userId === '-1' ? (
+						<Route path='/' element={<GroupsForUnknown />} />
+					) : isTeacher ? (
+            <>
+              <Route path='/' element={<Groups />} />
+            <Route path='/attendance/:id' element={<Attendance />} />
+            </>
+
+					) : (
+            <>
+              <Route path='/' element={<GroupsForStudent />} />
+            <Route path='/attendance/:id' element={<AttendanceStudent />} />
+            </>
+
+					)}
+
+					<Route path='/create-group' element={<CreateGroup />} />{' '}
+				</Route>
+			</Routes>
+		</div>
+	)
 }
 
-export default App;
+export default App

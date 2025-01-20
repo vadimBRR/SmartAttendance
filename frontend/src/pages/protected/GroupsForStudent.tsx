@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import GroupItem from '../../components/Group/GroupItem';
 import EmptyGroupItem from '../../components/Group/EmptyGroupItem';
 import Modal from '../../components/Modal'; 
-import { Monitor, LogOut } from 'lucide-react'; 
-import { useLessons } from '../../hooks/useApi';
+import { LogOut } from 'lucide-react'; 
+import { useLessons, useLessonsByStudent } from '../../hooks/useApi';
 import { useAuth } from '../../providers/AuthProvider';
 
 const time = ['7:30', '9:10', '10:50', '13:30', '15:10'];
-const finished_time = ['9:00', '10:40', '12:20', '15:00', '16:40']; // Масив з часом закінчення уроків
+const finished_time = ['9:00', '10:40', '12:20', '15:00', '16:40']; // Додано масив finished_time
 
 const week_days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -37,15 +37,12 @@ const formatTime = (timeStr: string) => {
   return `${parseInt(hours)}:${minutes}`;
 };
 
-const Groups = () => {
-  const [isModalOpen, setModalOpen] = useState(false); 
+const GroupsForStudent = () => {
   const courseId = '1';
-  const teacherId = useAuth().userId || 0;
-  const { data, isLoading, error } = useLessons(teacherId || '');
-
+  const teacherId = useAuth().userId || '-1';
+  const { data, isLoading, error } = useLessonsByStudent(teacherId);
   const { logout, email } = useAuth(); 
   console.log(email);
-  const toggleModal = () => setModalOpen(!isModalOpen);
 
   if (isLoading) return <p>Loading...</p>;
   if (error) return <p>Error: {(error as Error).message}</p>;
@@ -57,7 +54,7 @@ const Groups = () => {
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-6 text-center relative">
-        <h1 className="text-4xl font-bold text-[#2596be] mb-2">SmartAttendance - Teacher</h1>
+        <h1 className="text-4xl font-bold text-[#2596be] mb-2">SmartAttendance - Student</h1>
         <p className="text-lg text-gray-600 max-w-2xl mx-auto">
           This project is powered by <strong>Raspberry Pi Pico</strong>, serving as an advanced scanner for <strong>ISIC</strong> cards. 
           It helps teachers track student attendance during lessons in real-time, while students can view their attendance records.
@@ -72,17 +69,8 @@ const Groups = () => {
           >
             <LogOut size={24} />
           </button>
-          <button
-            className="bg-[#2596be] text-white p-2 rounded shadow hover:bg-[#197b9b] transition"
-            onClick={toggleModal}
-            title="Open IC Scanner"
-          >
-            <Monitor size={24} />
-          </button>
         </div>
       </div>
-
-      <Modal isOpen={isModalOpen} onClose={toggleModal}></Modal>
 
       <div className="flex flex-col gap-2 bg-white rounded shadow pb-2">
         <div
@@ -119,7 +107,7 @@ const Groups = () => {
 
               const id = lessonEntry ? parseInt(lessonEntry[0]) : null;
               const lesson = lessonEntry ? lessonEntry[1] : null;
-              const finishTime = finished_time[colIndex] || "16:40"; // Використовуємо значення з finished_time
+              const finishTime = finished_time[colIndex]; // Тепер використовуємо finished_time з масиву
 
               return lesson ? (
                 <GroupItem
@@ -127,7 +115,7 @@ const Groups = () => {
                   id={id}
                   group={{
                     start_time: lesson.start_time,
-                    finish_time: finishTime, // Тепер використовуємо finished_time
+                    finish_time: finishTime, // Використовуємо finished_time
                     short_course_name: lesson.short_course_name,
                   }}
                 />
@@ -154,11 +142,10 @@ const Groups = () => {
           <li>
             <span className="text-gray-400 font-bold">Gray</span>: Free time slots
           </li>
-          <li>Click on a free slot to schedule a new lesson.</li>
         </ul>
       </div>
     </div>
   );
 };
 
-export default Groups;
+export default GroupsForStudent;

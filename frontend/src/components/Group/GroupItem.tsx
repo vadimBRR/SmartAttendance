@@ -12,7 +12,7 @@ interface GroupItemProps {
   
 }
 
-const GroupItem: React.FC<GroupItemProps> = ({ id, group, }) => {
+const GroupItem = ({ id, group, }: GroupItemProps) => {
   const navigate = useNavigate();
 
   const handleClick = () => {

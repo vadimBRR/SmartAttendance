@@ -12,7 +12,12 @@ const SignUp = () => {
 		await register(email, password)
 	}
 	return (
-		<div>
+		<div
+			className='flex flex-col justify-center items-center bg-gray-400/10 py-6 px-12 rounded-xl'
+			style={{
+				boxShadow: ' 10px 10px 10px rgba(0, 0, 0, 0.15  )',
+			}}
+		>
 			<p className='text-center text-2xl'>Sign Up </p>
 			<CustomInput
 				name={email}

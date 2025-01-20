@@ -14,10 +14,11 @@ interface StudentAttendance {
 interface AttendanceTableProps {
   data: StudentAttendance[];
   lessonId: number;
-  addAttendance: (data: { lessonId: number; weekNumber: number; studentId: number }) => void; // Додаємо пропс для мутації
+  addAttendance: (data: { lessonId: number; weekNumber: number; studentId: number, present: boolean | null, arrival_time: string | null }) => void;
+  weekNumber: number;
 }
 
-const AttendanceTable: React.FC<AttendanceTableProps> = ({ data, lessonId, addAttendance }) => {
+const AttendanceTable= ({ data, lessonId, addAttendance,weekNumber }: AttendanceTableProps) => {
   const weeks = Array.from({ length: 13 }, (_, i) => i + 1);
   const [selected, setSelected] = useState<{
     student_id: number;
@@ -30,17 +31,20 @@ const AttendanceTable: React.FC<AttendanceTableProps> = ({ data, lessonId, addAt
     week: number,
     newStatus: boolean | null
   ) => {
-    // Оновлення локального стану (можна зробити це локально, без змін масиву)
     setSelected(null);
-    console.log(`Updated attendance for Student ID: ${student_id}, Week: ${week + 1}, New Status: ${newStatus}`);
-
-    // Викликаємо мутацію для додавання відвідуваності
+    console.log(
+      `Updated attendance for Student ID: ${student_id}, Week: ${week + 1}, New Status: ${newStatus}`
+    );
+  
     addAttendance({
       lessonId,
-      weekNumber: week + 1, // Тижні починаються з 1
+      weekNumber: week + 1,
       studentId: student_id,
+      present: newStatus, 
+      arrival_time: new Date().toISOString()
     });
   };
+  
 
   return (
     <div className="relative">
@@ -51,7 +55,8 @@ const AttendanceTable: React.FC<AttendanceTableProps> = ({ data, lessonId, addAt
             {weeks.map((week) => (
               <th
                 key={week}
-                className="border border-gray-300 p-4 bg-gray-100 text-gray-800 text-center"
+                className={`border border-gray-300 p-4 text-gray-800 text-center ${
+                  week === weekNumber ? 'bg-[#2596be] text-white' : 'bg-gray-100 '}`}
               >
                 Week {week}
               </th>

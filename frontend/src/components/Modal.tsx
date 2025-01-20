@@ -1,30 +1,26 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import CustomDropdown from "./CustomDropdown";
+import { useClassrooms, usePicoState, useChangeClassroom, useCurrentClassroom } from "../hooks/useApi";
 
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
+const Modal = ({ isOpen, onClose }: ModalProps) => {
   const navigate = useNavigate();
-  const [scannerState] = useState<"online" | "offline" | "sleep">("online");
-  const [selectedRoom, setSelectedRoom] = useState<number | null>(null);
+  const {
+    data: scannerState,
+    isLoading: isPicoLoading,
+    error: picoError,
+  } = usePicoState();
+  const { data: classrooms, isLoading, error } = useClassrooms();
+  const { mutate: changeClassroom } = useChangeClassroom(); 
+  const { data: currentClassroom, isLoading: isCurrentClassLoading } = useCurrentClassroom();
 
-  const rooms = [
-    { id: 1, label: "Endor" },
-    { id: 2, label: "Meridian" },
-    { id: 3, label: "Kronos" },
-    { id: 4, label: "Vulcan" },
-    { id: 5, label: "Caprica" },
-    { id: 6, label: "Abydos" },
-    { id: 7, label: "Dune" },
-    { id: 8, label: "Mirek" },
-    { id: 9, label: "Romulus" },
-    { id: 10, label: "Solaris" },
-    { id: 11, label: "Hyperion" },
-  ];
+  const [selectedRoom, setSelectedRoom] = useState<number | null>(null); 
+  const [isApplyVisible, setIsApplyVisible] = useState(false);
 
   const getStateColor = (state: "online" | "offline" | "sleep") => {
     if (state === "online") return "bg-green-500";
@@ -43,25 +39,47 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
     };
   }, [isOpen]);
 
-  const handleRunScannerTest = () => {
-    const now = new Date();
-    const day = now.toLocaleDateString("en-GB", { weekday: "short" }); 
-    const startTime = new Date(now.getTime() + 5 * 60 * 1000)
-      .toTimeString()
-      .slice(0, 5); 
-    const finishTime = new Date(now.getTime() + 16 * 60 * 1000) 
-      .toTimeString()
-      .slice(0, 5);
+  useEffect(() => {
+    if (currentClassroom) {
+      setSelectedRoom(Number(currentClassroom.id)); 
+    }
+  }, [currentClassroom]);
 
-    const courseId = 404; 
+  useEffect(() => {
+    if (selectedRoom && selectedRoom !== Number(currentClassroom?.id)) {
+      setIsApplyVisible(true);
+    } else {
+      setIsApplyVisible(false);
+    }
+  }, [selectedRoom, currentClassroom]);
+
+  const handleRunScannerTest = () => {
+    if (selectedRoom) {
+      changeClassroom(selectedRoom.toString());
+    }
+
+    const now = new Date();
+    const day = now.toLocaleDateString("en-GB", { weekday: "short" });
+    const startTime = new Date(now.getTime() + 5 * 60 * 1000).toTimeString().slice(0, 5);
+    const finishTime = new Date(now.getTime() + 16 * 60 * 1000).toTimeString().slice(0, 5);
+
+    const courseId = 404;
 
     navigate(
-      `/create-group?day=${day}&start_time=${startTime}&finish_time=${finishTime}&course_id=${courseId}`
+      `/create-group?day=${day}&start_time=${startTime}&finish_time=${finishTime}&course_id=${courseId}&is_test=true`
     );
 
-    onClose(); 
+    onClose();
   };
 
+  const handleApplyChanges = () => {
+    if (selectedRoom) {
+      changeClassroom(selectedRoom.toString()); // Застосовуємо зміни класу
+      setIsApplyVisible(false); // Приховуємо кнопку після застосування
+    }
+  };
+
+  if (isLoading || isPicoLoading || isCurrentClassLoading) return <p>Loading...</p>;
   if (!isOpen) return null;
 
   return (
@@ -71,7 +89,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
     >
       <div
         className="bg-white p-6 rounded shadow-lg relative max-w-lg w-full"
-        onClick={(e) => e.stopPropagation()} 
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-gray-800">Configuration Pico</h2>
@@ -87,8 +105,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
           <span className="text-lg font-semibold mr-3">Status:</span>
           <div className="flex items-center gap-2">
             <div
-              className={`w-6 h-6 rounded-full ${getStateColor(scannerState)} mr-2`}
-              title={scannerState}
+              className={`w-6 h-6 rounded-full ${getStateColor(scannerState?.status || "offline")} mr-2`}
+              title={scannerState ? scannerState.status : "offline"}
             ></div>
           </div>
         </div>
@@ -96,11 +114,23 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-2">Select Room</h3>
           <CustomDropdown
-            options={rooms}
+            options={classrooms?.map((room) => ({
+              id: room.id,
+              label: room.label,
+            }))}
             selectedOption={selectedRoom}
             onSelect={setSelectedRoom}
           />
         </div>
+
+        {isApplyVisible && (
+          <button
+            onClick={handleApplyChanges}
+            className="w-full py-2 px-4 bg-yellow-500 text-white font-semibold rounded shadow hover:bg-yellow-600 transition mb-4"
+          >
+            Apply
+          </button>
+        )}
 
         <button
           onClick={handleRunScannerTest}

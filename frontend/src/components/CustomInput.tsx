@@ -16,7 +16,7 @@ const CustomInput = ({name, setName,title='',containerStyle='', isPassword, inpu
     <div className={`${containerStyle} `}>
       {title && <p className='text-xl mb-1'>{title}</p>}
       <div className=''>
-        <input name={name} onChange={(e)=>setName(e.currentTarget.value)} className={`bg-[#aaaaaa]/50 text-xl px-2 py-1 rounded-lg border border-[#ffffff]/20 ${inputStyle}`} type={isPassword ? (isPasswordVisible ? 'text' : 'password') : 'text'} />
+        <input name={name} onChange={(e)=>setName(e.currentTarget.value)} className={`bg-black/10 text-xl px-2 py-1 rounded-lg border border-[#ffffff]/20 ${inputStyle}`} type={isPassword ? (isPasswordVisible ? 'text' : 'password') : 'text'} />
         {isPassword && <div className='flex flex-row gap-1 mt-2'>
           <input type='checkbox' checked={isPasswordVisible} onChange={(e)=>setPasswordVisible(e.currentTarget.checked)}/>
           <p className='text-base'>{isPasswordVisible ? 'Hide Password' : 'Show Password'}</p>

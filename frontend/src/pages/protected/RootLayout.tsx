@@ -5,18 +5,17 @@ import { useAuth } from '../../providers/AuthProvider'
 import Navbar from '../../components/Navbar'
 
 const RootLayout = () => {
-	const { token } = useAuth();
+	const { token,isTeacher } = useAuth();
+  console.log(isTeacher);
 
 	if (!token) {
 	  return <Navigate to="/sign-in" />;
 	}
 	return (
 		<div className='w-full h-screen'>
-			{/* <Navbar/> */}
 			<section className='flex-1 h-full w-full px-2 my-5'>
 				<Outlet />
 			</section>
-			{/* <Footer /> */}
 		</div>
 	)
 }

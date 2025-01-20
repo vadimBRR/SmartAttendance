@@ -19,13 +19,13 @@ export interface Lesson {
   short_course_name: string;
 }
 
-export const fetchLessons = async ( teacherId: number): Promise<{ lessons: Lesson[] }>  => {
+export const fetchLessons = async ( teacherId: string): Promise<{ lessons: Lesson[] }>  => {
 	const response = await fetch(
 		`${API_BASE_URL}/lessons/${teacherId}`,
 		{
 			method: 'GET',
 			headers: {
-				'Content-Type': 'application/json', // Додано
+				'Content-Type': 'application/json', 
 			},
 			mode: 'cors',
 		}
@@ -42,7 +42,7 @@ export const fetchLessonAttendance = async (lessonId: number) => {
 		{
 			method: 'GET',
 			headers: {
-				'Content-Type': 'application/json', // Додано
+				'Content-Type': 'application/json', 
 			},
 		}
 	)
@@ -53,20 +53,32 @@ export const fetchLessonAttendance = async (lessonId: number) => {
 }
 
 export const fetchStudentsWithoutGroup = async (courseId: number) => {
-	const response = await fetch(
-		`${API_BASE_URL}/create_group?course_id=${courseId}`,
-		{
-			method: 'GET',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-		}
-	)
-	if (!response.ok) {
-		throw new Error('Failed to fetch students without group')
-	}
-	return response.json()
-}
+  const response = await fetch(
+    `${API_BASE_URL}/create_group?course_id=${courseId}`,
+    {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch students without group');
+  }
+
+  const data = await response.json();
+
+  // Перетворюємо id студентів в рядки, щоб уникнути округлення
+  const students = data.map((student: { id: any; name: string; email: string }) => ({
+    ...student,
+    id: String(student.id), // Перетворюємо ID в рядок
+  }));
+
+  console.log("Formatted students:", students);
+  return students;
+};
+
 export const addLesson = async (payload: {
   course_id: number;
   students: {
@@ -99,9 +111,28 @@ export const addLesson = async (payload: {
 
   return response.json();
 };
+export const addLessonAttendance = async ({
+  lessonId,
+  weekNumber,
+  studentId,
+  present,
+}: {
+  lessonId: number;
+  weekNumber: number;
+  studentId: number;
+  present: boolean | null;
+}) => {
+  const url = new URL(`${API_BASE_URL}/lessons/lesson_${lessonId}/attendance/${weekNumber}/${studentId}`);
 
-export const addLessonAttendance = async ({ lessonId, weekNumber, studentId }: { lessonId: number; weekNumber: number; studentId: number }) => {
-  const response = await fetch(`${API_BASE_URL}/lessons/lesson_${lessonId}/attendance/${weekNumber}/${studentId}`, {
+  const presentMapping: { [key: string]: number } = {
+    true: 1,
+    false: 2,
+    null: 3,
+  };
+
+  url.searchParams.append('present', String(presentMapping[String(present)])); 
+
+  const response = await fetch(url.toString(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -116,9 +147,24 @@ export const addLessonAttendance = async ({ lessonId, weekNumber, studentId }: {
   return response.json();
 };
 
+export const fetchCurrentWeek = async (): Promise<number> => {
+  const response = await fetch(`${API_BASE_URL}/get-current-week`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch current week');
+  }
+  return response.json();
+};
+
+export const fetchPicoState = async (): Promise<{ status: "online" | "offline" | "sleep" }> => {
+  const response = await fetch(`${API_BASE_URL}/get-pico-state`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch Pico state');
+  }
+  return response.json();
+};
 
 
-import { useAuth } from '../providers/AuthProvider'
+
 
 export interface LoginResponse {
 	access_token: string
@@ -183,5 +229,126 @@ export const useGetUser = async (token: string): Promise<void> => {
 		throw new Error('User retrieval failed')
 	}
 }
+
+
+export const fetchLessonsByStudent = async (studentId: string): Promise<{ lessons: Lesson[] }> => {
+  const response = await fetch(`${API_BASE_URL}/lessons/student/${studentId}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch lessons for student');
+  }
+
+  return response.json();
+};
+
+export const fetchLessonAttendanceByStudent = async (
+  lessonId: number,
+  studentId: string
+): Promise<{ present: boolean | null; arrival_time: string | null, course_name: string,  short_course_name: string}[]> => {
+  const response = await fetch(
+    `${API_BASE_URL}/lessons${lessonId}/attendance/${studentId}`,
+    {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch lesson attendance for student');
+  }
+
+  return response.json();
+};
+
+export const changeClassroom = async (classroomId: string): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/change-classroom?classroom_id=${classroomId}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ classroom_id: classroomId }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Failed to change classroom');
+  }
+};
+
+export const fetchClassrooms = async (): Promise<{ id: string; label: string }[]> => {
+  const response = await fetch(`${API_BASE_URL}/get-classrooms`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch classrooms');
+  }
+
+  return response.json();
+};
+
+export const fetchCurrentClassroom = async (): Promise<{ id: string; label: string }> => {
+  const response = await fetch(`${API_BASE_URL}/get-current-classroom`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch current classroom');
+  }
+
+  return response.json();
+};
+
+export const fetchTestLesson = async (): Promise<{
+  students: {
+    student_id: string;
+    student_name: string;
+    course_name: string;
+    short_course_name: string;
+    lesson_id: number;
+    attendance: { present: boolean | null; arrival_time: string | null }[];
+  }[];
+}> => {
+  const response = await fetch(`${API_BASE_URL}/get_test_lesson`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Failed to fetch test lesson');
+  }
+
+  return response.json();
+};
+
+export const deleteTestLesson = async (): Promise<void> => {
+  const response = await fetch(`${API_BASE_URL}/delete_test_lesson`, {
+    method: 'GET', // Якщо це видалення, розгляньте можливість змінити метод на 'DELETE'
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Failed to delete test lesson');
+  }
+};
 
 
