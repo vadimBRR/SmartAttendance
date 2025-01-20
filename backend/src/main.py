@@ -245,43 +245,61 @@ class IdentifierPayload(BaseModel):
     id: int
     dt: int
 
+
+from fastapi import HTTPException, Depends
+from sqlalchemy.orm import Session
+
+
 @app.post("/notifications/")
 async def receive_attendance(
         payload: IdentifierPayload,
         session: Session = Depends(get_db)
 ):
     try:
-        date_info = get_date_details(payload.dt)  # Use payload instead of IdentifierPayload
-        if not payload.id or payload.dr:
+        # Retrieve date information and validate payload
+        date_info = get_date_details(payload.dt)
+        print(payload.id, payload.dt)  # Log for debugging
+        if not payload.id or not payload.dt:
             raise HTTPException(status_code=400, detail="Error during reading ISIC.")
 
-        week_num = date_info['week_num'][1]
-
+        # Extract details from date_info
+        week_num = date_info['week_num']
         arrival_time = date_info['arrival_time']
         day_of_week = date_info['day_of_week']
 
+        # Retrieve the lesson for the given time slot
         lesson = get_lesson_by_classroom_time(day_of_week=day_of_week, arrival_time=arrival_time, session=session)
-        lesson_id = lesson.id[0]
+        if not lesson:
+            raise HTTPException(status_code=404, detail="There is no lesson right now.")
 
+        lesson_id = lesson.id
         if not lesson_id:
             raise HTTPException(status_code=404, detail="There is no lesson right now.")
+
+        # Record attendance for the student
 
         await post_lesson_attendance(
             lesson_id=lesson_id,
             week_number=week_num,
             student_id=payload.id,
-            present=True
+            present=True,
+            session=session
         )
-
+        # Commit the transaction to the database
         session.commit()
+
+        # Return success response
         return {"status": "success", "student_id": payload.id}
 
     except Exception as e:
+        # Rollback on error and raise HTTP exception
         session.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to record attendance: {str(e)}")
-    finally:
-        session.close()
 
+    finally:
+        pass
+        # Always close the session
+        # session.close()
 
 
 @app.get("/courses/{teacher_id}")
@@ -656,12 +674,12 @@ async def get_current_classroom(session: Session = Depends(get_db)):
     classroom = get_classroom_by_name(classroom_id = current_classroom, session=session)
     return {"id": classroom.id, "label": classroom.name}
 
-@app.get('/is_test')
-def is_test():
-    mode = get_mode()
-    if mode == 'TEST':
-        return True
-    return False
 
+@app.get("/is_test")
+async def is_in_test_mode(session: Session = Depends(get_db)):
+    course_id = 404
+    course = get_course_by_id(course_id=course_id, session=session)
+
+    return {"is_in_test_mode": course is not None}
 
 

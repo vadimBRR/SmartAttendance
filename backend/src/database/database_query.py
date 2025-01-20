@@ -422,6 +422,11 @@ def get_teacher_courses(teacher_id: int, session = None):
 def get_lesson_by_classroom_time(arrival_time, day_of_week: str, session = None):
     if not session:
         return
+    print(arrival_time)
+
+    # Ensure arrival_time is already a datetime object, then extract its time part.
+    arrival_time = arrival_time.time() if isinstance(arrival_time, datetime) else datetime.strptime(arrival_time, "%Y-%m-%d %H:%M:%S").time()
+
     return session.query(Lesson).filter(
             Lesson.classroom_id == get_classroom_id(),
             Lesson.day_of_week == day_of_week,

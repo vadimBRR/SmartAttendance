@@ -19,6 +19,7 @@ from src.database.database_config import DatabaseConfig
 from src.sheduler import LessonScheduler
 
 from src.config_file import update_config_file
+import aiohttp
 
 load_dotenv('local.env')
 
@@ -45,13 +46,16 @@ fast_mqtt = FastMQTT(config=mqtt_config)
 
 
 
-def send_to_fastapi(data, url = FASTAPI_URL):
+
+async def send_to_fastapi(data, url=FASTAPI_URL):
     try:
-        response = requests.post(url, json=data)
-        response.raise_for_status()
-        logger.info(f"Successfully sent data to FastAPI: {response.json()}")
-    except requests.exceptions.RequestException as e:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=data) as response:
+                response.raise_for_status()  # Перевірка на помилки
+                logger.info(f"Successfully sent data to FastAPI: {await response.json()}")
+    except aiohttp.ClientError as e:
         logger.error(f"Failed to send data to FastAPI: {e}")
+
 
 # @fast_mqtt.on_connect()
 # def on_connect(client: mqtt.Client, userdata, flags, reason_code, properties):
@@ -86,37 +90,36 @@ def handle_commands(client: mqtt.Client, payload: dict):
                 quit(0)
 
 
-def xor_decrypt(encrypted_data):
+async def xor_decrypt(encrypted_data):
 
     decrypted = bytes(encrypted_data[i] ^ SECRET_KEY[i % len(SECRET_KEY)] for i in range(len(encrypted_data)))
     return int.from_bytes(decrypted, 'big')
 
-def handle_identifier(client: mqtt.Client, payload: dict):
+async def handle_identifier(client: mqtt.Client, payload: dict):
     if 'id' not in payload or 'dt' not in payload:
         logger.error(f"Invalid identifier payload: {payload}")
         return
 
     try:
         encrypted_id = base64.b64decode(payload['id'])
-
-        identifier_id = xor_decrypt(encrypted_id)
+        identifier_id = await xor_decrypt(encrypted_id)  # Задаємо await для асинхронного xor_decrypt
         timestamp = payload['dt']
 
-        logger.info(f"Processing identifier:encrypted_id={encrypted_id} ID={identifier_id}, Timestamp={timestamp}")
-        send_to_fastapi({
+        logger.info(f"Processing identifier: encrypted_id={encrypted_id} ID={identifier_id}, Timestamp={timestamp}")
+        await send_to_fastapi({
             "id": identifier_id,
             "dt": timestamp
-        })
+        })  # Використовуємо await для асинхронної функції
 
     except Exception as e:
         logger.error(f"Failed to process identifier: {e}")
 
-def handle_activity(client: mqtt.Client, command: str):
+async def handle_activity(client: mqtt.Client, command: str):
     client.publish(f"{NOTIFIER_BASE_TOPIC}/command", f"{command}")
     logger.debug(f"Sent a command: {command}")
 
 
-def notify(client: mqtt.Client, payload: dict):
+async def notify(client: mqtt.Client, payload: dict):
     notification = Notification(**payload)
     apobj = apprise.Apprise()
     apobj.add(str(notification.urls))
@@ -126,7 +129,7 @@ def notify(client: mqtt.Client, payload: dict):
     )
 
 @fast_mqtt.on_message()
-async def on_message(client: mqtt.Client,  topic: str, payload: bytes, qos: int, properties: dict):
+async def on_message(client: mqtt.Client, topic: str, payload: bytes, qos: int, properties: dict):
     logger.debug(f'{topic}: {payload}')
     payload = json.loads(payload.decode())
 
@@ -146,9 +149,9 @@ async def on_message(client: mqtt.Client,  topic: str, payload: bytes, qos: int,
     elif topic.endswith('/cmd'):
         handle_commands(client, payload)
     elif topic.endswith('/identifier'):
-        handle_identifier(client, payload)
+        await handle_identifier(client, payload)  # Додаємо await для асинхронної функції
     else:
-        notify(client, payload)
+        await notify(client, payload)  # Додаємо await, якщо notify асинхронна
 
 
 def main():
