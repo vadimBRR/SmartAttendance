@@ -172,14 +172,14 @@ async def get_test_lesson(session: Session = Depends(get_db)):
     course_id = 404
     course = get_course_by_id(course_id=course_id, session=session)
     if not course:
-        raise HTTPException(status_code=400, detail=f"No course was found with lesson ID {lesson_id}")
+        raise HTTPException(status_code=400, detail=f"No course was found with lesson ID {course.id}")
     lesson = get_lesson_by_course_id(course_id=course_id, session=session)
     if not lesson:
-        raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson_id}")
+        raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson.id}")
     students = lesson.students
     students_data = []
     for student in students:
-        attendances = get_all_student_attendance(lesson_id=lesson_id, student_id=student.id, session=session)
+        attendances = get_all_student_attendance(lesson_id=lesson.id, student_id=student.id, session=session)
         attendance_records = [
             {"present": attendance.present, "arrival_time": attendance.arrival_time}
             for attendance in attendances
@@ -190,7 +190,7 @@ async def get_test_lesson(session: Session = Depends(get_db)):
             "student_name": student.name,
             "course_name": course.name,
             "short_course_name": course.short_name,
-            "lesson_id": lesson.lesson_id,
+            "lesson_id": lesson.id,
             "attendance": attendance_records
         })
 
