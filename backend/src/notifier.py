@@ -8,6 +8,7 @@ from apprise import apprise
 from apprise.decorators import notify
 from apprise.plugins.fcm.priority import NotificationPriority
 from dotenv import load_dotenv
+from fastapi_mqtt import FastMQTT, MQTTConfig
 from loguru import logger
 import paho.mqtt.client as mqtt
 from paho.mqtt.client import MQTTMessage
@@ -32,6 +33,18 @@ FASTAPI_URL = os.getenv('FASTAPI_URL')
 SECRET_KEY = base64.b64decode("NDA0X2JldGFfa2V5MTIzNDU=")
 TIMEZONE = os.getenv('TIMEZONE')
 
+mqtt_config = MQTTConfig(
+    host=NOTIFIER_BROKER,  # Replace with your broker's host
+    port=1883,               # Broker port
+    username=NOTIFIER_USER,  # Replace with your MQTT username
+    password=NOTIFIER_PASSWORD,  # Replace with your MQTT password
+    # keepalive=60,
+    version=4
+)
+fast_mqtt = FastMQTT(config=mqtt_config)
+
+
+
 def send_to_fastapi(data, url = FASTAPI_URL):
     try:
         response = requests.post(url, json=data)
@@ -40,21 +53,20 @@ def send_to_fastapi(data, url = FASTAPI_URL):
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to send data to FastAPI: {e}")
 
-# def get_from_fastapi(endpoint):
-#     url = f"{FASTAPI_URL}/{endpoint}"
-#     try:
-#         response = requests.get(url)
-#         response.raise_for_status()
-#         data = response.json()
-#         logger.info(f"Successfully fetched data from FastAPI: {data}")
-#         return data
-#     except requests.exceptions.RequestException as e:
-#         logger.error(f"Failed to fetch data from FastAPI: {e}")
-#         return None
+# @fast_mqtt.on_connect()
+# def on_connect(client: mqtt.Client, userdata, flags, reason_code, properties):
+#     logger.debug(f"Connected with result code {reason_code}")
+#     print(settings.base_topic)
+#     client.subscribe(settings.base_topic)
+#     client.subscribe(f'{settings.base_topic}/identifier')
+#     client.subscribe(f'{settings.base_topic}/cmd')
+#     client.subscribe(f'{settings.base_topic}/status')
 #
+#     client.publish(f'{settings.base_topic}/status-notifer', json.dumps({'status': 'online'}), retain=True)
+#     # scheduler.start()
 
-
-def on_connect(client: mqtt.Client, userdata, flags, reason_code, properties):
+@fast_mqtt.on_connect()
+def on_connect(client, flags, reason_code, properties):
     logger.debug(f"Connected with result code {reason_code}")
     print(settings.base_topic)
     client.subscribe(settings.base_topic)
@@ -64,7 +76,6 @@ def on_connect(client: mqtt.Client, userdata, flags, reason_code, properties):
 
     client.publish(f'{settings.base_topic}/status-notifer', json.dumps({'status': 'online'}), retain=True)
     # scheduler.start()
-
 
 def handle_commands(client: mqtt.Client, payload: dict):
     if 'cmd' in payload:
@@ -114,12 +125,12 @@ def notify(client: mqtt.Client, payload: dict):
         title=notification.title,
     )
 
+@fast_mqtt.on_message()
+async def on_message(client: mqtt.Client,  topic: str, payload: bytes, qos: int, properties: dict):
+    logger.debug(f'{topic}: {payload}')
+    payload = json.loads(payload.decode())
 
-def on_message(client: mqtt.Client, userdata, msg: MQTTMessage):
-    logger.debug(f'{msg.topic}: {msg.payload}')
-    payload = json.loads(msg.payload.decode())
-
-    if msg.topic.endswith('/status'):
+    if topic.endswith('/status'):
         print('status')
         status = payload.get('status')
         timestamp = payload.get('timestamp')
@@ -132,13 +143,12 @@ def on_message(client: mqtt.Client, userdata, msg: MQTTMessage):
         elif status == "sleep":
             update_config_file(file_path='config.json', key='STATE', value=status)
             logger.info(f"Device went offline at {time.localtime(timestamp)}")
-    elif msg.topic.endswith('/cmd'):
+    elif topic.endswith('/cmd'):
         handle_commands(client, payload)
-    elif msg.topic.endswith('/identifier'):
+    elif topic.endswith('/identifier'):
         handle_identifier(client, payload)
     else:
         notify(client, payload)
-
 
 
 def main():

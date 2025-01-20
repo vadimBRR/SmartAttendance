@@ -1,30 +1,92 @@
-import os
+import asyncio
+import json
+import logging
+import threading
+from contextlib import asynccontextmanager, contextmanager
+from functools import partial
 
-import pytz
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException
+from loguru import logger
 from pydantic import BaseModel
 from src.database.database_config import DatabaseConfig
-from datetime import time, datetime, timedelta, timezone, date
+from datetime import datetime, timedelta, timezone, date
 from jose import jwt, JWTError
-
-from typing import List, Optional, Literal,Annotated
+from typing import List, Annotated
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import Generator
 from src.database.models import (student_courses, student_lessons,
                                  teacher_courses, Course, Teacher, Classroom,
-                                 Lesson, Student, Attendance, Classroom, User as UserM,Transaction as TransactionM)
+                                 Lesson, Student, Attendance, Classroom, User as UserM ,Transaction as TransactionM)
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
-from src.config_file import read_config_key
-from src.config_file import update_config_file, read_config_key
+from src.config_file import *
+from src.utils import __get_current_week, get_date_details
+# from src.config_file import update_config_file, read_config_key
+# from src.config_file import get_classroom_id, set_classroom
+# from src.database.database_query import (get_all_classrooms, get_classroom_name, get_teacher_by_email, \
+#                                          get_student_by_email, delete_lesson_by_id, get_lesson_collisions_in_classroom, get_student_lessons_collision, \
+#                                          get_student_by_id, is_student_assigned_to_a_course, assign_course_to_a_student, get_teacher_by_id, get_course_by_id, \
+#                                          get_classroom_by_id, __add_students_to_lesson, __add_lesson, __validate_lesson_request, LessonRequest, \
+#                                          get_lesson_by_id, get_student_attendance_by_week, report_attendance, \
+#                                          get_all_students_not_assigned_to_course, get_teacher_lessons, get_teacher_courses, \
+#                                          get_lesson_by_classroom_time, get_all_student_attendance, is_student_assigned_to_a_lesson, get_classroom_by_name,
+#                                          get_students_lessons_t)
+from src.database.database_query import *
+from src.utils import __get_current_week, get_date_details
 
-from src.database.database_query import get_classroom_by_name
+from src.notifier import fast_mqtt
 
-from backend.src.database.database_query import get_all_classrooms, get_classroom_name
+from src.config_file import set_classroom
 
-app = FastAPI()
+from src.sheduler import LessonScheduler
+
+from src.notifier import handle_activity
+
+from src.database.database_query import get_lesson_by_course_id
+
+import asyncio
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from loguru import logger
+from src.notifier import fast_mqtt  # Assuming you've imported your FastMQTT instance
+
+# Define global variable outside of lifespan context manager
+scheduler = None
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    global scheduler  # Declare global at the beginning to modify the global variable
+
+    try:
+        # Start the MQTT client asynchronously
+        await fast_mqtt.mqtt_startup()
+        logging.info("Startup event triggered.")
+
+        # Initialize the scheduler
+        scheduler = LessonScheduler(
+            session=db_config.get_session(),
+            handle_activity=partial(handle_activity, fast_mqtt)
+        )
+        scheduler.start(classroom_id=1)
+        logging.info("Scheduler started successfully.")
+
+        # Yield control back to FastAPI (the application will run here)
+        yield
+    finally:
+        # Shutdown MQTT client and scheduler when FastAPI shuts down
+        await fast_mqtt.mqtt_shutdown()
+        logging.info("Shutdown event triggered.")
+
+        if scheduler:
+            scheduler.shutdown()
+            logging.info("Scheduler shut down successfully.")
+
+
+# Initialize FastAPI app with the custom lifespan manager
+app = FastAPI(lifespan=lifespan)
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -50,68 +112,35 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-
 load_dotenv('local.env')
-try:
-    START_DATE = datetime.fromisoformat(os.getenv('START_DATE'))
-except Exception as e:
-    print(f"Invalid START_DATE format. Using current datetime instead. Error: {e}")
-    START_DATE = datetime.now()
 
 db_config = DatabaseConfig(echo_flag=False)
 db_config.init_db()
-# db = db_config.populate_database()
-# manager = AttendanceManager(db_config)
 
-def get_db() -> Generator[Session, None, None]:
-    session = db_config.Session()
+def get_db() -> Session:
+    session = db_config.get_session()
     try:
         yield session
     finally:
         session.close()
 
-# Event handlers
-# @app.on_event("startup")
-# async def on_startup():
-#     print("Application is starting...")
-#     global manager
-#     try:
-#         db_config.init_db()
-#         print("Database initialized.")
-#         print(f"START_DATE: {START_DATE}")
-#     except Exception as e:
-#         print(f"Error during startup: {e}")
-#
-# @app.on_event("shutdown")
-# async def on_shutdown():
-#     print("Application is shutting down...")
-#     try:
-#         db_config.close_session()
-#         # __update_config_file(file_path='config.json', key='STATE', value='offline')
-#         print("Resources cleaned up and state updated.")
-#     except Exception as e:
-#         print(f"Error during shutdown: {e}")
+
 
 
 @app.get("/lessons{lesson_id}/attendance")
 async def get_lessons_attendance(lesson_id: int, session: Session = Depends(get_db)):
     try:
-        lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
+        lesson = get_lesson_by_id(lesson_id=lesson_id, session=session)
         if not lesson:
             raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson_id}")
-            # return []
-        course = session.query(Course).filter(Course.id == lesson.course_id).first()
+
+        course = get_course_by_id(course_id = lesson.course_id, session=session)
         if not course:
             raise HTTPException(status_code=400, detail=f"No course was found with lesson ID {lesson_id}")
-            # return []
         students = lesson.students
         students_data = []
         for student in students:
-            attendances = session.query(Attendance).filter(
-                Attendance.lesson_id == lesson_id,
-                Attendance.student_id == student.id
-            ).order_by(Attendance.week_number.asc()).all()
-
+            attendances = get_all_student_attendance(lesson_id=lesson_id, student_id=student.id, session=session)
             attendance_records = [
                 {"present": attendance.present, "arrival_time": attendance.arrival_time}
                 for attendance in attendances
@@ -134,40 +163,69 @@ async def get_lessons_attendance(lesson_id: int, session: Session = Depends(get_
         session.close()
 
 
+@app.get('/get_test_lesson')
+async def get_test_lesson(session: Session = Depends(get_db)):
+    course_id = 404
+    course = get_course_by_id(course_id=course_id, session=session)
+    if not course:
+        raise HTTPException(status_code=400, detail=f"No course was found with lesson ID {lesson_id}")
+    lesson = get_lesson_by_course_id(course_id=course_id, session=session)
+    if not lesson:
+        raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson_id}")
+    students = lesson.students
+    students_data = []
+    for student in students:
+        attendances = get_all_student_attendance(lesson_id=lesson_id, student_id=student.id, session=session)
+        attendance_records = [
+            {"present": attendance.present, "arrival_time": attendance.arrival_time}
+            for attendance in attendances
+        ]
+
+        students_data.append({
+            "student_id": f"{student.id}",
+            "student_name": student.name,
+            "course_name": course.name,
+            "short_course_name": course.short_name,
+            "lesson_id": lesson.lesson_id,
+            "attendance": attendance_records
+        })
+
+    return {"students": students_data}
+
+@app.get("/delete_test_lesson")
+async def delete_test_lesson(session: Session = Depends(get_db)):
+    course_id = 404
+    course = get_course_by_id(course_id=course_id, session=session)
+    if not course:
+        raise HTTPException(status_code=400, detail=f"No course was found with lesson ID {lesson_id}")
+    lesson = get_lesson_by_course_id(course_id=course_id, session=session)
+    if not lesson:
+        raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson_id}")
+    delete_lesson_by_id(lesson_id=lesson.id, session=session)
+
+
 @app.get("/lessons{lesson_id}/attendance/{student_id}")
 async def get_lessons_attendance_for_student(lesson_id: int, student_id: int, session: Session = Depends(get_db)):
     try:
-        lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
-        if not lesson:
+        if not get_lesson_by_id(lesson_id=lesson_id, session=session):
             raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson_id}")
+        if not get_student_by_id(id=student_id, session=session):
+            raise HTTPException(status_code=400, detail=f"No such student with ID {student_id} in db.")
 
-        student = session.query(Student).filter(Student.id == student_id).first()
-        if not student:
-            raise HTTPException(status_code=400, detail=f"No such studentwith ID {student_id} in db.")
-
-        connection_exists = session.query(student_lessons).filter(
-            student_lessons.c.lesson_id == lesson_id,
-            student_lessons.c.student_id == student_id
-        ).first()
-        if not connection_exists:
+        if not is_student_assigned_to_a_lesson(student_id=student_id, lesson_id=lesson_id, session=session):
             raise HTTPException(status_code=400, detail=f"Student with ID {student_id} does not have lesson with ID {lesson_id}.")
 
-
-        attendances = session.query(Attendance).filter(
-            Attendance.lesson_id == lesson_id,
-            Attendance.student_id == student_id
-        ).order_by(Attendance.week_number.asc()).all()
-
-        course = session.query(Course).filter(Course.id == lesson.course_id).first()
+        attendances = get_all_student_attendance(lesson_id=lesson_id, student_id=student_id, session=session)
+        course = get_course_by_id(lesson_id, session=session)
 
         return [
-                {"present": attendance.present,
-                 "arrival_time": attendance.arrival_time,
-                 "short_course_name": course.short_name,
-                 "course_name": course.name
-                 }
-                for attendance in attendances
-            ]
+            {"present": attendance.present,
+             "arrival_time": attendance.arrival_time,
+             "short_course_name": course.short_name,
+             "course_name": course.name
+             }
+            for attendance in attendances
+        ]
 
     except Exception as e:
         raise HTTPException(status_code=500, detail="An unexpected error occurred.")
@@ -185,7 +243,7 @@ async def receive_attendance(
         session: Session = Depends(get_db)
 ):
     try:
-        date_info = __get_date_details(payload.dt)  # Use payload instead of IdentifierPayload
+        date_info = get_date_details(payload.dt)  # Use payload instead of IdentifierPayload
         if not payload.id or payload.dr:
             raise HTTPException(status_code=400, detail="Error during reading ISIC.")
 
@@ -194,17 +252,11 @@ async def receive_attendance(
         arrival_time = date_info['arrival_time']
         day_of_week = date_info['day_of_week']
 
-        lesson_id = session.query(Lesson.id).filter(
-            Lesson.classroom_id == 1,
-            Lesson.day_of_week == day_of_week,
-            Lesson.start_time - timedelta(minutes=10) <= arrival_time,
-            Lesson.finish_time > arrival_time
-        ).first()
+        lesson = get_lesson_by_classroom_time(day_of_week=day_of_week, arrival_time=arrival_time, session=session)
+        lesson_id = lesson.id[0]
 
         if not lesson_id:
             raise HTTPException(status_code=404, detail="There is no lesson right now.")
-
-        lesson_id = lesson_id[0]  # Extract the lesson ID
 
         await post_lesson_attendance(
             lesson_id=lesson_id,
@@ -229,13 +281,7 @@ async def get_courses(
         teacher_id: int,
         session: Session = Depends(get_db)
 ):
-    courses = session.query(Course).join(
-        teacher_courses,
-        Course.id == teacher_courses.c.course_id
-    ).filter(
-        teacher_courses.c.teacher_id == teacher_id
-    ).all()
-
+    courses = get_teacher_courses(teacher_id=teacher_id, session=session)
     courses_info = [
         {"id": course.id, "name": course.name, "short_name": course.short_name} for course in courses
     ]
@@ -249,15 +295,11 @@ async def get_lessons_by_teacher(
         session: Session = Depends(get_db)
 ):
     try:
-        lessons = session.query(Lesson).filter(
-            Lesson.teacher_id == teacher_id
-        ).all()
+        lessons = get_teacher_lessons(teacher_id=teacher_id, session=session)
 
         result = {}
         for lesson in lessons:
-            course = session.query(Course).filter(
-                Course.id == lesson.course_id
-            ).first()
+            course = get_course_by_id(course_id=lesson.course_id, session=session)
 
             if course:
                 result[lesson.id] = {
@@ -277,23 +319,16 @@ async def get_lessons_by_teacher(
         session.close()
 
 
-@app.get("/lessons/student/{student_id}")
+@app.get("/lessons/student/{student_id} ")
 async def get_lessons_by_student(
         student_id: int,
         session: Session = Depends(get_db)
 ):
     try:
-        lessons = session.query(Lesson).filter(
-            Lesson.id.in_(
-                session.query(student_lessons.c.lesson_id).filter(student_lessons.c.student_id == student_id)
-            )
-        ).all()
-
+        lessons = get_students_lessons_t(student_id=student_id, session=session)
         result = {}
         for lesson in lessons:
-            course = session.query(Course).filter(
-                Course.id == lesson.course_id
-            ).first()
+            course = get_course_by_id(lesson.course_id, session=session)
 
             if course:
                 result[lesson.id] = {
@@ -311,11 +346,8 @@ async def get_lessons_by_student(
 
     finally:
         pass
-        # session.close()
 
-
-
-@app.post("/lessons/lesson_{lesson_id}/attendance/{week_number}/{student_id}")
+@app.post("/lessons/lesson_{lesson_id}/attendance/{week_number}/{student_id} ")
 async def post_lesson_attendance(
         lesson_id: int,
         week_number: int,
@@ -324,7 +356,7 @@ async def post_lesson_attendance(
         session: Session = Depends(get_db)
 ):
     try:
-        lesson = session.query(Lesson).filter(Lesson.id == lesson_id).first()
+        lesson = get_lesson_by_id(lesson_id=lesson_id, session=session)
         lesson_date = date.today()
         arrival_time = datetime.combine(lesson_date, lesson.start_time)
 
@@ -334,14 +366,13 @@ async def post_lesson_attendance(
             3: None
         }
         present_value = int_to_bool.get(present, None)
-        attendance = session.query(Attendance) \
-            .filter(Attendance.lesson_id == lesson_id) \
-            .filter(Attendance.week_number == week_number) \
-            .filter(Attendance.student_id == student_id) \
-            .first()
 
-        attendance.present = present_value
-        attendance.arrival_time = arrival_time
+        attendance = get_student_attendance_by_week(lesson_id=lesson_id, week_num=week_number, student_id=student_id,
+                                                    session=session)
+        if not attendance:
+            raise HTTPException(status_code=404, detail="No such attendance in db.")
+
+        report_attendance(attendance=attendance, present=present_value, arrival_time=arrival_time, session=session)
         session.commit()
 
     except Exception as e:
@@ -350,27 +381,9 @@ async def post_lesson_attendance(
     finally:
         session.close()
 
-from typing import Literal
-
-# @app.post("/notifications/fetch-data")
-# async def get_state(state: Literal["NORMAL", "TEST"]):
-#     try:
-#         config_data = load_config()
-#         config_data["STATE"] = state.upper()
-#         with open(config_file, "w") as file:
-#             json.dump(config_data, file, indent=4)
-#         return {"state": config_data["STATE"]}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Error updating state: {e}")
-
-
 @app.get("/create_group")
 async def get_all_students_without_course(course_id: int, session: Session = Depends(get_db)):
-    students = session.query(Student).filter(
-        ~Student.id.in_(
-            session.query(student_courses.c.student_id).filter(student_courses.c.course_id == course_id)
-        )
-    ).all()
+    students = get_all_students_not_assigned_to_course(course_id=course_id, session=session)
 
     students_info = [
         {"id": f"{student.id}", "name": student.name, "email": student.email}
@@ -378,32 +391,6 @@ async def get_all_students_without_course(course_id: int, session: Session = Dep
     ]
 
     return students_info
-
-class AttendanceInfo(BaseModel):
-    present: List[Optional[bool]]
-    arrival_time: List[Optional[datetime]]
-
-    class Config:
-        arbitrary_types_allowed = True
-
-AttendanceInfo.model_rebuild()
-
-
-class StudentInfo(BaseModel):
-    student_id: int
-    name: str
-    attendance: List[AttendanceInfo]
-
-
-class LessonRequest(BaseModel):
-    course_id: int
-    students: List[StudentInfo]
-    created_at: datetime
-    day_of_week: str
-    start_time: time
-    finish_time: time
-    teacher_id: int
-    classroom_id: int
 
 
 @app.post("/add_lesson/")
@@ -427,8 +414,8 @@ async def add_lesson(lesson_request: LessonRequest, session: Session = Depends(g
 
         # assign students to the lesson
         added_students_attendance = __add_students_to_lesson(lesson=lesson, students_info=lesson_request.students,
-                                                  start_time=start_time, finish_time=finish_time,
-                                                  day_of_week=lesson_request.day_of_week, current_week=current_week, session=session)
+                                                             start_time=start_time, finish_time=finish_time,
+                                                             day_of_week=lesson_request.day_of_week, current_week=current_week, session=session)
 
         return {
             "message": "Lesson created and students' attendance successfully added.",
@@ -456,360 +443,96 @@ async def add_lesson(lesson_request: LessonRequest, session: Session = Depends(g
         # session.close()
 
 
-def __add_lesson(course_id: int, teacher_id: int, classroom_id: int, day_of_week: str,
-                 start_time, finish_time, session: Session = Depends(get_db)):
-    try:
-        if not isinstance(start_time, time) or not isinstance(finish_time, time):
-            raise ValueError("Invalid start_time or finish_time. They must be valid time objects.")
-
-        if start_time >= finish_time:
-            raise HTTPException(status_code=400, detail="Start time must be earlier than finish time.")
-
-        conflicting_lessons = session.query(Lesson).filter(
-            Lesson.day_of_week == day_of_week,
-            (Lesson.start_time < finish_time) & (Lesson.finish_time > start_time),
-            (Lesson.teacher_id == teacher_id) | (Lesson.classroom_id == classroom_id)
-        ).all()
-
-        if conflicting_lessons:
-            raise HTTPException(status_code=400,
-                                detail=f"Lesson conflicts with {len(conflicting_lessons)} existing lessons.")
-
-        # Create the new lesson
-        lesson = Lesson(
-            course_id=course_id,
-            teacher_id=teacher_id,
-            classroom_id=classroom_id,
-            day_of_week=day_of_week,
-            start_time=start_time,
-            finish_time=finish_time
-        )
-
-        session.add(lesson)
-        session.commit()
-
-        return lesson
-
-    except Exception as e:
-        session.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        pass
-        # session.close()
-
-
-def __add_students_to_lesson(lesson: Lesson, students_info: list, start_time, finish_time,
-                             day_of_week: str, current_week: int,
-                             session: Session = Depends(get_db)):
-    try:
-        result = {
-            "students_info": []
-        }
-        added_students = []
-        for student_info in students_info:
-            student = session.query(Student).filter_by(id=student_info.student_id).one_or_none()
-            if student:
-                student_conflicts = session.query(Lesson).filter(
-                    Lesson.day_of_week == day_of_week,
-                    (Lesson.start_time < finish_time) & (Lesson.finish_time > start_time),
-                    Lesson.students.any(Student.id == student_info.student_id)
-                ).all()
-
-                if student_conflicts:
-                    raise HTTPException(status_code=400,
-                                        detail=f"Student ID {student_info.student_id} has a schedule conflict. Skipping assignment.")
-
-                student.lessons.append(lesson)
-
-                is_assigned = session.query(student_courses).filter(
-                    student_courses.c.course_id == lesson.course_id,
-                    student_courses.c.student_id == student.id
-                ).first()
-
-                if not is_assigned:
-                    session.execute(
-                        student_courses.insert().values(course_id=lesson.course_id, student_id=student.id)
-                    )
-
-                session.commit()
-                added_students.append(student)
-                # session.commit()
-
-                attendance = __add_attendances_to_all_students(
-                    lesson=lesson,
-                    student=student,
-                    attendance=student_info.attendance,
-                    current_week=current_week,
-                    start_time=start_time,
-                    session=session
-                )
-
-                result["students_info"].append({
-                    "id": student.id,
-                    "name": student.name,
-                    "email": student.email,
-                    "attendance": attendance
-                })
-
-        session.commit()
-
-        return result
-
-    except HTTPException as e:
-        session.rollback()
-        raise e
-    except Exception as e:
-        session.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        pass
-        # session.close()
-
-
-def __add_attendances_to_all_students(lesson: Lesson, student: Student,
-                                      attendance: list[AttendanceInfo], current_week: int,
-                                      start_time, session: Session):
-    try:
-        all_week_attendances = []
-        start_datetime = datetime.combine(datetime.now(), start_time)
-        attendance_week = attendance[0] if len(attendance) > 0 else None
-
-        for week in range(1, 14):
-            if attendance_week and week <= current_week:
-                try:
-                    if week == current_week:
-                        present = (
-                            attendance_week.present[week - 1]
-                            if week - 1 < len(attendance_week.present)
-                            else None
-                        )
-                        arrival_time = (
-                            attendance_week.arrival_time[week - 1].replace(tzinfo=None)
-                            if week - 1 < len(attendance_week.arrival_time) and attendance_week.arrival_time[
-                                week - 1] is not None
-                            else datetime.now() if present and week - 1 < len(attendance_week.arrival_time)
-                            else None
-                        )
-                    else:
-                        present = (
-                            attendance_week.present[week - 1]
-                            if week - 1 < len(attendance_week.present)
-                            else False
-                        )
-                        arrival_time = (
-                            attendance_week.arrival_time[week - 1].replace(tzinfo=None)
-                            if week - 1 < len(attendance_week.arrival_time) and attendance_week.arrival_time[
-                                week - 1] is not None
-                            else None
-                        )
-                except IndexError:
-                    present = None
-                    arrival_time = None
-            else:
-                arrival_time = None
-                present = None
-
-            week_attendance = Attendance(
-                student=student,
-                lesson=lesson,
-                week_number=week,
-                arrival_time=arrival_time,
-                present=present
-            )
-            print(f"Week {week}: Present={present}, Arrival={arrival_time}")
-            all_week_attendances.append(week_attendance)
-
-        session.add_all(all_week_attendances)
-        session.commit()
-
-        return all_week_attendances
-
-    except Exception as e:
-        session.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# from datetime import datetime, timedelta
-def __get_current_week(current_date=None):
-    if current_date is None:
-        current_date = datetime.now()
-
-    return current_date.isocalendar()[1] - START_DATE.isocalendar()[1] + 1
-
-
-def __is_valid_day_format(day_str):
-    valid_days = [
-        "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
-    ]
-
-    return day_str in valid_days
-
-
-def __validate_attendance(attendance: AttendanceInfo, current_week: int):
-    if len(attendance.present) < current_week:
-        raise ValueError(f"Insufficient 'present' data. Expected at least {current_week} entries.")
-    if len(attendance.arrival_time) < current_week:
-        raise ValueError(f"Insufficient 'arrival_time' data. Expected at least {current_week} entries.")
-
-
-def __validate_student(student: StudentInfo, lesson_request: LessonRequest, session: Session):
-    db_student = session.query(Student).filter_by(id=student.student_id).first()
-    if not db_student:
-        raise ValueError(f"Student ID {student.student_id} does not exist in the database.")
-
-    name_parts = student.name.split()
-    if len(name_parts) < 2:
-        raise ValueError(f"Invalid student name format: {student.name}. Expected 'name surname'.")
-
-    for attendance in student.attendance:
-        __validate_attendance(attendance, current_week=len(attendance.present))
-
-    student_collisions = session.query(Lesson).join(Lesson.students).filter(
-        Lesson.day_of_week == lesson_request.day_of_week,
-        Lesson.students.any(Student.id == student.student_id),  # Student is in the lesson
-        (Lesson.start_time < lesson_request.finish_time) & (Lesson.finish_time > lesson_request.start_time),
-    ).all()
-    if student_collisions:
-        raise ValueError(
-            f"Student ID {student.student_id} has a scheduling conflict with {len(student_collisions)} existing lessons.")
-
-
-def __validate_lesson(lesson_request: LessonRequest, session: Session):
-    if not session.query(Course).filter_by(id=lesson_request.course_id).first():
-        raise ValueError(f"Course ID {lesson_request.course_id} does not exist in the database.")
-
-    if not session.query(Teacher).filter_by(id=lesson_request.teacher_id).first():
-        raise ValueError(f"Teacher ID {lesson_request.teacher_id} does not exist in the database.")
-
-    if not session.query(Classroom).filter_by(id=lesson_request.classroom_id).first():
-        raise ValueError(f"Classroom ID {lesson_request.classroom_id} does not exist in the database.")
-
-    if lesson_request.created_at > datetime.now():
-        raise ValueError("The 'created_at' timestamp cannot be in the future.")
-
-    if lesson_request.start_time >= lesson_request.finish_time:
-        raise ValueError("Start time must be earlier than finish time.")
-
-    if not __is_valid_day_format(lesson_request.day_of_week):
-        raise ValueError(f"'{lesson_request.day_of_week}' is not a valid day format.")
-
-    classroom_collisions = session.query(Lesson).filter(
-        Lesson.day_of_week == lesson_request.day_of_week,
-        Lesson.classroom_id == lesson_request.classroom_id,
-        (Lesson.start_time < lesson_request.finish_time) & (Lesson.finish_time > lesson_request.start_time),
-    ).all()
-    if classroom_collisions:
-        raise ValueError(
-            f"Schedule collision detected in the classroom with {len(classroom_collisions)} existing lessons.")
-
-
-def __validate_lesson_request(lesson_request: LessonRequest, session: Session):
-    try:
-        __validate_lesson(lesson_request, session)
-
-        for student in lesson_request.students:
-            __validate_student(student, lesson_request, session)
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
 @app.get('/delete/lesson_{lesson_id}')
 async def delete_lesson(lesson_id: int, session: Session = Depends(get_db)):
-    session.query(Lesson).filter(Lesson.id == lesson_id).delete(synchronize_session='fetch')
-    session.query(Attendance).filter(Attendance.lesson_id == lesson_id).delete(synchronize_session='fetch')
-    session.query(student_lessons).filter(student_lessons.c.lesson_id == lesson_id).delete(synchronize_session='fetch')
-    session.commit()
+    delete_lesson_by_id(lesson_id = lesson_id, session=session)
 
-      
-      
-      
 class Transaction(BaseModel):
-  amount: float
-  category: str
-  description: str
-  is_income: bool
-  date: str
-  
-  
+    amount: float
+    category: str
+    description: str
+    is_income: bool
+    date: str
+
+
 class TransactionModel(BaseModel):
-  id: int
-  
-  class Config:
-    from_attributes = True
-    
+    id: int
+
+    class Config:
+        from_attributes = True
+
 class UserCreate(BaseModel):
-  email: str  # Замість email
-  password: str
-  
+    email: str  # Замість email
+    password: str
+
 class TokenData(BaseModel):
-  email: str  # Замість email
-  
+    email: str  # Замість email
+
 class User(BaseModel):
-  id: int
-  email: str  # Замість email
+    id: int
+    email: str  # Замість email
 
-  
-    
 
-    
+
+
+
 db_dependency = Annotated[Session, Depends(get_db)]
 
 
-#Transactions
+# Transactions
 @app.post("/transactions/", response_model=TransactionModel)
 async def create_transaction(transaction: Transaction, db: db_dependency):
-  db_transaction = TransactionM(**transaction.dict())
-  db.add(db_transaction)
-  db.commit()
-  db.refresh(db_transaction)
-  return db_transaction
+    db_transaction = TransactionM(**transaction.dict())
+    db.add(db_transaction)
+    db.commit()
+    db.refresh(db_transaction)
+    return db_transaction
 
 @app.get("/transactions/", response_model=List[TransactionModel])
 async def read_transactions(db: db_dependency, skip: int = 0, limit: int = 100):
-  return db.query(TransactionM).offset(skip).limit(limit).all()
+    return db.query(TransactionM).offset(skip).limit(limit).all()
 
 
-#Create User
+# Create User
 def get_user_by_email(email: str, db: db_dependency):
-  return db.query(UserM).filter(UserM.email == email).first()
+    return db.query(UserM).filter(UserM.email == email).first()
 
 def create_user(user: UserCreate, db: db_dependency):
-  hashed_password = pwd_context.hash(user.password)
-  db_user = UserM(email=user.email, hashed_password=hashed_password)
-  db.add(db_user)
-  db.commit()
-  db.refresh(db_user)
-  return db_user
+    hashed_password = pwd_context.hash(user.password)
+    db_user = UserM(email=user.email, hashed_password=hashed_password)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
 
 @app.post('/register/')
 def register(user: UserCreate, db: Session = Depends(get_db)):
-  db_user = get_user_by_email(user.email, db)
-  if db_user:
-    raise HTTPException(status_code=400, detail="Email already exists")
-  return create_user(user, db)
+    db_user = get_user_by_email(user.email, db)
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already exists")
+    return create_user(user, db)
 
-#Login
+# Login
 def authenticate_user(email: str, password: str, db: Session):
-  user = get_user_by_email(email, db)
-  if not user:
-    return False
-  if not pwd_context.verify(password, user.hashed_password):
-    return False
-  return user
+    user = get_user_by_email(email, db)
+    if not user:
+        return False
+    if not pwd_context.verify(password, user.hashed_password):
+        return False
+    return user
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
-  to_encode = data.copy()
-  if expires_delta:
-    expire = datetime.now(timezone.utc) + expires_delta
-  else:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=15)
-  to_encode.update({"exp": expire})
-  encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-  return encoded_jwt
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 
-    
+
 @app.post('/token/')
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(form_data.username, form_data.password, db)
@@ -825,21 +548,21 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     )
     return {"access_token": access_token, "token_type": "bearer", "email": user.email}
 
-#Verify Token
+# Verify Token
 def verify_token(token: str = Depends(oauth2_scheme)):
-  try:
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    email: str = payload.get("sub")
-    if email is None:
-      raise HTTPException(status_code=403, detail="Token is invalid or expired")
-    return payload
-  except JWTError:
-    raise HTTPException(status_code=403, detail="Token is invalid or expired")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=403, detail="Token is invalid or expired")
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=403, detail="Token is invalid or expired")
 
 @app.get('/verify-token/{token}')
 async def verify_user_token(token: str):
-  verify_token(token)
-  return {"message": "Token is valid"}
+    verify_token(token)
+    return {"message": "Token is valid"}
 
 @app.get('/verify-email/teacher')
 async def verify_email(email: str,
@@ -847,12 +570,12 @@ async def verify_email(email: str,
     try:
         result = {"id": "-1", "isTeacher": False}
 
-        teacher = session.query(Teacher).filter(Teacher.email == email).first()
+        teacher = get_teacher_by_email(email=email, session=session)
         if teacher:
             result["id"] = f"{teacher.id}"
             result["isTeacher"] = True
         else:
-            student = session.query(Student).filter(Student.email == email).first()
+            student = get_student_by_email(email=email, session=session)
             if student:
                 result["id"] = f"{student.id}"
 
@@ -870,28 +593,47 @@ async def get_current_week():
 
 @app.get('/get-pico-state')
 async def get_pico_state():
-   status = read_config_key(file_path='config.json', key='STATE')
-   return {"status": status}
+    status = read_config_key(file_path='config.json', key='STATE')
+    return {"status": status}
 
-import json
-
-
-def __get_date_details(unix_timestamp):
-    arrival_time = datetime.fromtimestamp(unix_timestamp)
-    week_num = __get_current_week(arrival_time)
-    day_of_week = datetime.now(pytz.timezone('Europe/Bratislava')).strftime('%A')
-    return {
-        'arrival_time': arrival_time,
-        'week_num': week_num,
-        'day_of_week': day_of_week
-    }
 
 @app.post('/change-classroom')
-async def change_classroom(classroom_id: int,
-                     session: Session = Depends(get_db)):
-    __set_classroom(classroom_id=classroom_id)
-    classroom_name = get_classroom_name(classroom_id=classroom_id)
-    # message_queue.put({"type": "classroom_change", "classroom_name": classroom_name})
+async def change_classroom(classroom_id: int, session: Session = Depends(get_db)):
+    """
+    Change the classroom and publish the updated configuration to MQTT.
+    """
+    try:
+        # Update classroom configuration locally
+        set_classroom(classroom_id=classroom_id)
+
+        # Get classroom name
+        classroom_name = get_classroom_name(classroom_id=classroom_id, session=session)
+        classroom_name = classroom_name[0]
+
+        if not classroom_name:
+            raise HTTPException(status_code=404, detail="Classroom not found")
+
+        # Prepare the payload
+        payload = {
+            "classroom_id": classroom_id,
+            "classroom_name": classroom_name
+        }
+
+        # Publish the payload to the MQTT topic
+        base_topic = "kpi/endor/404_beta"  # Replace with your base topic
+        topic = f"{base_topic}/config"
+        fast_mqtt.publish(topic, json.dumps(payload))
+        logger.debug(f"Sent a command: {classroom_id}")# Removed `await`
+
+        return {
+            "status": "success",
+            "message": "Classroom configuration updated and published.",
+            "published_payload": payload
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to change classroom: {str(e)}")
+
 
 @app.get('/get-classrooms')
 async def get_classrooms(session: Session = Depends(get_db)):
@@ -902,15 +644,7 @@ async def get_classrooms(session: Session = Depends(get_db)):
     ]
 @app.get('/get-current-classroom')
 async def get_current_classroom(session: Session = Depends(get_db)):
-    current_classroom = __get_classroom_id()
+    current_classroom = get_classroom_id()
     classroom = get_classroom_by_name(classroom_id = current_classroom, session=session)
     return {"id": classroom.id, "label": classroom.name}
-
-def __get_classroom_id():
-    return read_config_key(key='CLASROOM_ID', file_path='config.json')
-
-def __set_classroom(classroom_id: int):
-    update_config_file(file_path='config.json', key='CLASROOM_ID', value=classroom_id)
-
-
 

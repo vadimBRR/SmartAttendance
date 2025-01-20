@@ -1,13 +1,16 @@
+import logging
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timedelta, date
 import pytz
 from dotenv import load_dotenv, set_key
 import os
+
+from sqlalchemy.orm import Session
 from src.database.models import Lesson, Attendance, Classroom
 
-
 class LessonScheduler:
-    def __init__(self, session, handle_activity, timezone_str='Europe/Bratislava', env_path='.env'):
+    def __init__(self, session: Session, handle_activity, timezone_str='Europe/Bratislava', env_path='local.env'):
         self.session = session
         self.timezone = pytz.timezone(timezone_str)
         self.scheduler = BackgroundScheduler(timezone=self.timezone)
@@ -25,10 +28,11 @@ class LessonScheduler:
 
         # Calculate the current week number from the start date
         self.current_week_num = self.calculate_week_number()
-        print(f"Starting program with week number: {self.current_week_num}")
+        logging.info(f"Starting scheduler for classroom ID: {self.current_lesson_id}")
 
     def start(self, classroom_id):
-        # Schedule a job to check for the next lesson
+        # Schedule a job to check for the next lesso
+        logging.info(f"Starting scheduler for classroom ID: {classroom_id}")
         self.scheduler.add_job(self.check_and_schedule_next_lesson, 'interval', minutes=1, args=[classroom_id])
 
         # Schedule a job to recalculate the week number every Sunday at midnight
@@ -38,6 +42,7 @@ class LessonScheduler:
         self.update_week_number()
 
         self.scheduler.start()
+        logging.info("Scheduler started.")
 
     def shutdown(self):
         self.scheduler.shutdown()
