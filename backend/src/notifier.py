@@ -114,7 +114,7 @@ async def handle_identifier(client: mqtt.Client, payload: dict):
     except Exception as e:
         logger.error(f"Failed to process identifier: {e}")
 
-async def handle_activity(client: mqtt.Client, command: str):
+def handle_activity(client: mqtt.Client, command: str):
     client.publish(f"{NOTIFIER_BASE_TOPIC}/command", f"{command}")
     logger.debug(f"Sent a command: {command}")
 
@@ -147,42 +147,42 @@ async def on_message(client: mqtt.Client, topic: str, payload: bytes, qos: int, 
             update_config_file(file_path='config.json', key='STATE', value=status)
             logger.info(f"Device went offline at {time.localtime(timestamp)}")
     elif topic.endswith('/cmd'):
-        handle_commands(client, payload)
+        await handle_commands(client, payload)
     elif topic.endswith('/identifier'):
         await handle_identifier(client, payload)  # Додаємо await для асинхронної функції
     else:
         await notify(client, payload)  # Додаємо await, якщо notify асинхронна
 
 
-def main():
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-    client.username_pw_set(settings.user, settings.password)
-    client.will_set(f'{settings.base_topic}/status', json.dumps({'status': 'offline'}), retain=True)
-
-    client.on_connect = on_connect
-    client.on_message = on_message
-
-    client.connect(settings.broker, settings.port, 60)
-
-    db_config = DatabaseConfig()
-
-    # Create a session instance from the sessionmaker
-    session = db_config.Session()
-
-    # Pass the session instance to the LessonScheduler
-    scheduler = LessonScheduler(session=session, handle_activity=partial(handle_activity, client))
-
-    # Start the scheduler
-    scheduler.start(classroom_id=1)
-
-    try:
-        client.loop_forever()
-    except KeyboardInterrupt:
-        client.disconnect()
-        # scheduler.shutdown()
-
-
-if __name__ == '__main__':
-    main()
+# def main():
+#     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+#     client.username_pw_set(settings.user, settings.password)
+#     client.will_set(f'{settings.base_topic}/status', json.dumps({'status': 'offline'}), retain=True)
+#
+#     client.on_connect = on_connect
+#     client.on_message = on_message
+#
+#     client.connect(settings.broker, settings.port, 60)
+#
+#     db_config = DatabaseConfig()
+#
+#     # Create a session instance from the sessionmaker
+#     session = db_config.Session()
+#
+#     # Pass the session instance to the LessonScheduler
+#     scheduler = LessonScheduler(session=session, handle_activity=partial(handle_activity, client))
+#
+#     # Start the scheduler
+#     scheduler.start(classroom_id=1)
+#
+#     try:
+#         client.loop_forever()
+#     except KeyboardInterrupt:
+#         client.disconnect()
+#         # scheduler.shutdown()
+#
+#
+# if __name__ == '__main__':
+#     main()
 
 # sF-$aE7uGcNAzt*

@@ -56,18 +56,14 @@ from src.database.database_query import __validate_lesson_request
 
 from src.database.database_query import __add_lesson, __add_students_to_lesson
 
-from src.config_file import get_mode
-
-# Define global variable outside of lifespan context manager
 scheduler = None
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global scheduler  # Declare global at the beginning to modify the global variable
+    global scheduler
 
     try:
-        # Start the MQTT client asynchronously
         await fast_mqtt.mqtt_startup()
         logging.info("Startup event triggered.")
 
@@ -79,10 +75,8 @@ async def lifespan(_app: FastAPI):
         scheduler.start(classroom_id=1)
         logging.info("Scheduler started successfully.")
 
-        # Yield control back to FastAPI (the application will run here)
         yield
     finally:
-        # Shutdown MQTT client and scheduler when FastAPI shuts down
         await fast_mqtt.mqtt_shutdown()
         logging.info("Shutdown event triggered.")
 
@@ -91,7 +85,6 @@ async def lifespan(_app: FastAPI):
             logging.info("Scheduler shut down successfully.")
 
 
-# Initialize FastAPI app with the custom lifespan manager
 app = FastAPI(lifespan=lifespan)
 
 
@@ -266,18 +259,23 @@ async def receive_attendance(
         week_num = date_info['week_num']
         arrival_time = date_info['arrival_time']
         day_of_week = date_info['day_of_week']
+        
+        print(arrival_time)
 
         # Retrieve the lesson for the given time slot
         lesson = get_lesson_by_classroom_time(day_of_week=day_of_week, arrival_time=arrival_time, session=session)
         if not lesson:
+            print("here1")
             raise HTTPException(status_code=404, detail="There is no lesson right now.")
 
         lesson_id = lesson.id
         if not lesson_id:
+            print("here2")
+          
             raise HTTPException(status_code=404, detail="There is no lesson right now.")
 
         # Record attendance for the student
-
+        print(f"lesson_id: {lesson_id}, week_num: {week_num}, student_id: {payload.id}")
         await post_lesson_attendance(
             lesson_id=lesson_id,
             week_number=week_num,

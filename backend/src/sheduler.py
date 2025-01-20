@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from src.database.models import Lesson, Attendance, Classroom
 
 from src.config_file import set_mode
+import asyncio
 
 
 class LessonScheduler:
@@ -118,37 +119,35 @@ class LessonScheduler:
         self.current_lesson_id = next_lesson.id  # Update the current lesson tracker
 
     def schedule_lesson_jobs(self, lesson):
-        print(f"Scheduling jobs for lesson ID {lesson.id}.")
-        if lesson.course_id == 404:
-            self.__set_time_before_lesson(0)
-            print("TEST!!!")
-            set_mode("TEST")
-        else:
-            set_mode("NORMAL")
-            time_before = self.__check_how_much_time_before_lesson(lesson)
-            if time_before <= timedelta(minutes=10):
-                self.__set_time_before_lesson(time_before)
-            else:
-                self.__set_time_before_lesson(10)
+      print(f"Scheduling jobs for lesson ID {lesson.id}.")
+      if lesson.course_id == 404:
+          self.__set_time_before_lesson(0)
+          print("TEST!!!")
+          set_mode("TEST")
+      else:
+          set_mode("NORMAL")
+          time_before = self.__check_how_much_time_before_lesson(lesson)
+          if time_before <= 10:  # порівнюємо з 10 хвилинами
+              self.__set_time_before_lesson(time_before)
+          else:
+              self.__set_time_before_lesson(10)
 
+      lesson_start_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.start_time))
+      start_notification_time = lesson_start_datetime - timedelta(minutes=self.time_before_lesson)
 
+      if datetime.now(self.timezone) < start_notification_time:
+          self.scheduler.add_job(
+              self.send_notification, 'date', run_date=start_notification_time, args=[lesson, 'start']
+          )
 
-        lesson_start_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.start_time))
-        start_notification_time = lesson_start_datetime - timedelta(minutes=self.time_before_lesson)
-        # start_notification_time = lesson_start_datetime
+      lesson_end_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.finish_time))
+      self.scheduler.add_job(
+          self.send_notification, 'date', run_date=lesson_end_datetime, args=[lesson, 'end']
+      )
+      self.scheduler.add_job(
+          self.mark_absences_for_lesson, 'date', run_date=lesson_end_datetime, args=[lesson.id]
+      )
 
-        if datetime.now(self.timezone) < start_notification_time:
-            self.scheduler.add_job(
-                self.send_notification, 'date', run_date=start_notification_time, args=[lesson, 'start']
-            )
-
-        lesson_end_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.finish_time))
-        self.scheduler.add_job(
-            self.send_notification, 'date', run_date=lesson_end_datetime, args=[lesson, 'end']
-        )
-        self.scheduler.add_job(
-            self.mark_absences_for_lesson, 'date', run_date=lesson_end_datetime, args=[lesson.id]
-        )
 
     def send_notification(self, lesson, action='start'):
         if action == 'start':
@@ -182,9 +181,42 @@ class LessonScheduler:
         self.time_before_lesson = time
 
 
+    
+    #
+    # async def send_notification(self, lesson, action='start'):
+    #     if action == 'start':
+    #         await self.handle_activity("wake_up")
+    #     elif action == 'end':
+    #         await self.handle_activity("sleep")
+    #     else:
+    #         print("Unknown action specified for notification.")
+    #
+    #
+    # def mark_absences_for_lesson(self, lesson_id):
+    #     print(f"Marking absences for lesson ID {lesson_id} in week {self.current_week_num}.")
+    #
+    #     unrecorded_attendances = self.session.query(Attendance).filter(
+    #         Attendance.lesson_id == lesson_id,
+    #         Attendance.present.is_(None),
+    #         Attendance.week_number == self.current_week_num
+    #     ).all()
+    #
+    #     for attendance in unrecorded_attendances:
+    #         attendance.present = False  # Mark as absent
+    #         print(f"Marked student {attendance.student_id} as absent for lesson {lesson_id}.")
+    #
+    #     try:
+    #         self.session.commit()
+    #     except Exception as e:
+    #         print(f"Error committing changes to the database: {e}")
+    #         self.session.rollback()
+    #
+    # def __set_time_before_lesson(self, time: int):
+    #     self.time_before_lesson = time
+    #
+    #
     def __check_how_much_time_before_lesson(self, lesson):
-        now = datetime.now()
-        lesson_start_time = datetime.combine(now.date(), lesson.start_time)
-        time_difference = lesson_start_time - now
-        return time_difference if time_difference > timedelta(0) else -1
-
+      now = datetime.now()
+      lesson_start_time = datetime.combine(now.date(), lesson.start_time)
+      time_difference = lesson_start_time - now
+      return int(time_difference.total_seconds() // 60)
