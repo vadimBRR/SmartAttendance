@@ -10,6 +10,7 @@ import { useAuth } from './providers/AuthProvider'
 import GroupsForStudent from './pages/protected/GroupsForStudent'
 import GroupsForUnknown from './pages/protected/GroupsForUnknown'
 import AttendanceStudent from './pages/protected/AttendanceStudent'
+import AttendanceTest from './pages/protected/AttendanceTest'
 
 function App() {
 	const { isTeacher, userId } = useAuth()
@@ -28,6 +29,7 @@ function App() {
             <>
               <Route path='/' element={<Groups />} />
             <Route path='/attendance/:id' element={<Attendance />} />
+            <Route path='/attendance_test' element={<AttendanceTest />} />
             </>
 
 					) : (

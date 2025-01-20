@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import CustomDropdown from "./CustomDropdown";
-import { useClassrooms, usePicoState, useChangeClassroom, useCurrentClassroom } from "../hooks/useApi";
+import { useClassrooms, usePicoState, useChangeClassroom, useCurrentClassroom, useIsTest } from "../hooks/useApi";
 
 interface ModalProps {
   isOpen: boolean;
@@ -17,6 +17,8 @@ const Modal = ({ isOpen, onClose }: ModalProps) => {
   } = usePicoState();
   const { data: classrooms, isLoading, error } = useClassrooms();
   const { mutate: changeClassroom } = useChangeClassroom(); 
+  const { data: isTest, isLoading: isTestLoading, error: testError } = useIsTest();
+  
   const { data: currentClassroom, isLoading: isCurrentClassLoading } = useCurrentClassroom();
 
   const [selectedRoom, setSelectedRoom] = useState<number | null>(null); 
@@ -79,7 +81,12 @@ const Modal = ({ isOpen, onClose }: ModalProps) => {
     }
   };
 
-  if (isLoading || isPicoLoading || isCurrentClassLoading) return <p>Loading...</p>;
+  const handleGoToTest = () => {
+    navigate('/attendance_test');
+    onClose();
+  };
+
+  if (isLoading || isPicoLoading || isCurrentClassLoading || isTestLoading) return <p>Loading...</p>;
   if (!isOpen) return null;
 
   return (
@@ -132,12 +139,30 @@ const Modal = ({ isOpen, onClose }: ModalProps) => {
           </button>
         )}
 
+        {/* {
+          !isTest ? (
+            <button
+          onClick={handleRunScannerTest}
+          className="w-full py-2 px-4 bg-[#2596be] text-white font-semibold rounded shadow hover:bg-[#197b9b] transition"
+        >
+          Run Scanner Test
+        </button>
+          ) : (
+            <button
+          onClick={handleGoToTest}
+          className="w-full py-2 px-4 bg-[#2596be] text-white font-semibold rounded shadow hover:bg-[#197b9b] transition"
+        >
+          Go to Test
+        </button>
+          )
+        } */}
         <button
           onClick={handleRunScannerTest}
           className="w-full py-2 px-4 bg-[#2596be] text-white font-semibold rounded shadow hover:bg-[#197b9b] transition"
         >
           Run Scanner Test
         </button>
+        
       </div>
     </div>
   );
