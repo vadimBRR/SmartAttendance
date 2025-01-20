@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, time
 from http.client import HTTPException
 from typing import List, Optional
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from src.database.models import (Student, Teacher, Course, Lesson,
                                  Attendance, Classroom, student_courses, teacher_courses,
@@ -419,20 +420,50 @@ def get_teacher_courses(teacher_id: int, session = None):
         teacher_courses.c.teacher_id == teacher_id
     ).all()
 
-def get_lesson_by_classroom_time(arrival_time, day_of_week: str, session = None):
+from datetime import datetime, timedelta
+
+from datetime import datetime, timedelta
+
+from datetime import datetime, timedelta
+
+
+def get_lesson_by_classroom_time(arrival_time, day_of_week: str, session=None):
     if not session:
-        return
-    print(arrival_time)
+        return None
 
-    # Ensure arrival_time is already a datetime object, then extract its time part.
-    arrival_time = arrival_time.time() if isinstance(arrival_time, datetime) else datetime.strptime(arrival_time, "%Y-%m-%d %H:%M:%S").time()
+    if isinstance(arrival_time, datetime):
+        pass
+    elif isinstance(arrival_time, time):
+        today = datetime.today().date()
+        arrival_time = datetime.combine(today, arrival_time)
+    else:
+        arrival_time = datetime.strptime(arrival_time, "%Y-%m-%d %H:%M:%S")
 
-    return session.query(Lesson).filter(
-            Lesson.classroom_id == get_classroom_id(),
-            Lesson.day_of_week == day_of_week,
-            Lesson.start_time - timedelta(minutes=10) <= arrival_time,
-            Lesson.finish_time > arrival_time
-        ).first()
+
+    today = datetime.today().date()
+
+    lessons = session.query(Lesson).filter(
+        Lesson.classroom_id == get_classroom_id(),
+        Lesson.day_of_week == day_of_week,
+    ).all()
+
+    if not lessons:
+        return None
+
+    for lesson in lessons:
+        start_time = lesson.start_time
+        finish_time = lesson.finish_time
+
+        lesson_start_datetime = datetime.combine(today, start_time)
+        lesson_finish_datetime = datetime.combine(today, finish_time)
+
+        lesson_start_datetime_minus_10 = lesson_start_datetime - timedelta(minutes=10)
+
+        if lesson_start_datetime_minus_10 <= arrival_time <= lesson_finish_datetime:
+            return lesson
+
+    return None
+
 
 def get_lesson_by_course_id(course_id: int, session = None):
     if not session:
