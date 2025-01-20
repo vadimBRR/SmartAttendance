@@ -352,3 +352,10 @@ export const deleteTestLesson = async (): Promise<void> => {
 };
 
 
+export const fetchIsTest = async (): Promise<boolean> => {
+  const response = await fetch(`${API_BASE_URL}/is_test`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch test mode status');
+  }
+  return response.json();
+};

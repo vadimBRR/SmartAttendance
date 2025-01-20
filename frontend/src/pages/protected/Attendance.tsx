@@ -16,15 +16,12 @@ const Attendance = () => {
 
   if (!lessonId && !isTest) return <div>No lesson ID provided</div>;
 
-  const deleteTestLessonMutation = useDeleteTestLesson();
   const {
     data,
     isLoading,
     error,
-  } = isTest
-    ? useTestLesson() 
-    : useLessonAttendance(parseInt(lessonId || '0'));
-
+  } = useLessonAttendance(parseInt(lessonId || '0'));
+  console.log(data);
   const { mutate: addAttendance } = useAddLessonAttendance(!isTest? parseInt(lessonId) : data.students[0].lesson_id);
   const short_course_name = data ? data.students[0].short_course_name : ''
   const course_name = data ? data.students[0].course_name : ''

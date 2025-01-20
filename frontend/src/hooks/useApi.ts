@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { fetchCourses, fetchLessons, fetchLessonAttendance, fetchStudentsWithoutGroup, addLesson, addLessonAttendance, fetchCurrentWeek, fetchPicoState, fetchLessonsByStudent, fetchLessonAttendanceByStudent, changeClassroom, fetchClassrooms, fetchCurrentClassroom, deleteTestLesson, fetchTestLesson } from '../api';
+import { fetchCourses, fetchLessons, fetchLessonAttendance, fetchStudentsWithoutGroup, addLesson, addLessonAttendance, fetchCurrentWeek, fetchPicoState, fetchLessonsByStudent, fetchLessonAttendanceByStudent, changeClassroom, fetchClassrooms, fetchCurrentClassroom, deleteTestLesson, fetchTestLesson, fetchIsTest } from '../api';
 
 export const useCourses = (teacherId: number) => {
   return useQuery({
@@ -40,8 +40,9 @@ export const useAddLesson = () => {
     },
   });
 };
-export const useAddLessonAttendance = (lessonId: number) => {
+export const useAddLessonAttendance = (lessonId: number, isTest = false) => {
   const { refetch: refetchLessonAttendance } = useLessonAttendance(lessonId);
+  const { refetch: refetchTestLesson } = useTestLesson();
 
   return useMutation({
     mutationFn: ({
@@ -57,7 +58,12 @@ export const useAddLessonAttendance = (lessonId: number) => {
     }) => addLessonAttendance({ lessonId, weekNumber, studentId, present }),
     onSuccess: () => {
       console.log('Attendance added successfully');
-      refetchLessonAttendance(); 
+      if(isTest){
+        refetchTestLesson();
+      }else{
+        refetchLessonAttendance(); 
+      }
+
     },
     onError: (error: any) => {
       console.error('Failed to add attendance:', error.message || error);
@@ -138,5 +144,13 @@ export const useDeleteTestLesson = () => {
     onError: (error: any) => {
       console.error('Failed to delete test lesson:', error.message || error);
     },
+  });
+};
+
+
+export const useIsTest = () => {
+  return useQuery({
+    queryKey: ['isTest'],
+    queryFn: fetchIsTest,
   });
 };

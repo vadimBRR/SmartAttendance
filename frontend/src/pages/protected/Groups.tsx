@@ -3,7 +3,7 @@ import GroupItem from '../../components/Group/GroupItem';
 import EmptyGroupItem from '../../components/Group/EmptyGroupItem';
 import Modal from '../../components/Modal'; 
 import { Monitor, LogOut } from 'lucide-react'; 
-import { useLessons } from '../../hooks/useApi';
+import { useIsTest, useLessons } from '../../hooks/useApi';
 import { useAuth } from '../../providers/AuthProvider';
 
 const time = ['7:30', '9:10', '10:50', '13:30', '15:10'];

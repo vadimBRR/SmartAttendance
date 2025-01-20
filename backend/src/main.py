@@ -266,18 +266,23 @@ async def receive_attendance(
         week_num = date_info['week_num']
         arrival_time = date_info['arrival_time']
         day_of_week = date_info['day_of_week']
+        
+        print(arrival_time)
 
         # Retrieve the lesson for the given time slot
         lesson = get_lesson_by_classroom_time(day_of_week=day_of_week, arrival_time=arrival_time, session=session)
         if not lesson:
+            print("here1")
             raise HTTPException(status_code=404, detail="There is no lesson right now.")
 
         lesson_id = lesson.id
         if not lesson_id:
+            print("here2")
+          
             raise HTTPException(status_code=404, detail="There is no lesson right now.")
 
         # Record attendance for the student
-
+        print(f"lesson_id: {lesson_id}, week_num: {week_num}, student_id: {payload.id}")
         await post_lesson_attendance(
             lesson_id=lesson_id,
             week_number=week_num,

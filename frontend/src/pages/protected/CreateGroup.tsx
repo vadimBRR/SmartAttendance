@@ -165,7 +165,9 @@ const CreateGroup = () => {
   
     if (isTest) {
       const now = new Date();
-      startTime = formatTime(now);
+      const duration1 = parseInt('11', 10) || 0;
+
+      startTime = formatTime(calculateFinishTime(now, 11));
       const duration = parseInt(testDuration, 10) || 0;
       finishTime = formatTime(calculateFinishTime(now, duration));
     }
@@ -207,7 +209,7 @@ const CreateGroup = () => {
       onSuccess: () => {
         setIsFormSubmitted(false);
         if(isTest){
-          navigate('/attendance/-1&is_test=true');
+          navigate('/attendance_test');
         }else{
           navigate('/');
         }
