@@ -9,6 +9,9 @@ import os
 from sqlalchemy.orm import Session
 from src.database.models import Lesson, Attendance, Classroom
 
+from src.config_file import set_mode
+
+
 class LessonScheduler:
     def __init__(self, session: Session, handle_activity, timezone_str='Europe/Bratislava', env_path='local.env'):
         self.session = session
@@ -119,7 +122,9 @@ class LessonScheduler:
         if lesson.course_id == 404:
             self.__set_time_before_lesson(0)
             print("TEST!!!")
+            set_mode("TEST")
         else:
+            set_mode("NORMAL")
             time_before = self.__check_how_much_time_before_lesson(lesson)
             if time_before <= timedelta(minutes=10):
                 self.__set_time_before_lesson(time_before)

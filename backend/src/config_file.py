@@ -51,8 +51,8 @@ def get_start_date() -> str:
 def set_start_date(start_date: str):
     update_config_file(file_path='config.json', key='START_DATE', value=start_date)
 
-def get_state() -> str:
-    return read_config_key(key='STATE', file_path='config.json')
+def get_mode() -> str:
+    return read_config_key(key='MODE', file_path='config.json')
 
-def set_state(state: str):
-    update_config_file(file_path='config.json', key='STATE', value=state)
+def set_mode(state: str):
+    update_config_file(file_path='config.json', key='MODE', value=state)

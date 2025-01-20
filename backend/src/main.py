@@ -56,6 +56,8 @@ from src.database.database_query import __validate_lesson_request
 
 from src.database.database_query import __add_lesson, __add_students_to_lesson
 
+from src.config_file import get_mode
+
 # Define global variable outside of lifespan context manager
 scheduler = None
 
@@ -653,6 +655,13 @@ async def get_current_classroom(session: Session = Depends(get_db)):
     current_classroom = get_classroom_id()
     classroom = get_classroom_by_name(classroom_id = current_classroom, session=session)
     return {"id": classroom.id, "label": classroom.name}
+
+@app.get('/is_test')
+def is_test():
+    mode = get_mode()
+    if mode == 'TEST':
+        return True
+    return False
 
 
 
