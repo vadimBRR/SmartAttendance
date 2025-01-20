@@ -121,7 +121,7 @@ class LessonScheduler:
             print("TEST!!!")
         else:
             time_before = self.__check_how_much_time_before_lesson(lesson)
-            if time_before <= 10:
+            if time_before <= timedelta(minutes=10):
                 self.__set_time_before_lesson(time_before)
             else:
                 self.__set_time_before_lesson(10)
@@ -182,5 +182,4 @@ class LessonScheduler:
         lesson_start_time = datetime.combine(now.date(), lesson.start_time)
         time_difference = lesson_start_time - now
         return time_difference if time_difference > timedelta(0) else -1
-
 
