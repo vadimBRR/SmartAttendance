@@ -131,7 +131,7 @@ def get_db() -> Session:
 
 
 
-@app.get("/lessons{lesson_id}/attendance")
+@app.get("/lessons/lesson_{lesson_id}/attendance")
 async def get_lessons_attendance(lesson_id: int, session: Session = Depends(get_db)):
     try:
         lesson = get_lesson_by_id(lesson_id=lesson_id, session=session)
