@@ -208,7 +208,7 @@ async def delete_test_lesson(session: Session = Depends(get_db)):
     delete_lesson_by_id(lesson_id=lesson.id, session=session)
 
 
-@app.get("/lessons/lesson_{lesson_id}/attendance/{student_id}")
+@app.get("/lessons{lesson_id}/attendance/{student_id}")
 async def get_lessons_attendance_for_student(lesson_id: int, student_id: int, session: Session = Depends(get_db)):
     try:
         if not get_lesson_by_id(lesson_id=lesson_id, session=session):
@@ -351,7 +351,7 @@ async def get_lessons_by_student(
     finally:
         pass
 
-@app.post("/lessons/lesson_{lesson_id}/attendance/{week_number}/{student_id} ")
+@app.post("/lessons/lesson_{lesson_id}/attendance/{week_number}/{student_id}")
 async def post_lesson_attendance(
         lesson_id: int,
         week_number: int,
