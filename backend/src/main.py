@@ -206,6 +206,8 @@ async def delete_test_lesson(session: Session = Depends(get_db)):
     if not lesson:
         raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson_id}")
     delete_lesson_by_id(lesson_id=lesson.id, session=session)
+    session.query(student_courses).filter(student_courses.c.course_id == course_id).delete(synchronize_session='fetch')
+    session.commit()
 
 
 @app.get("/lessons{lesson_id}/attendance/{student_id}")
