@@ -1,9 +1,6 @@
 import os
-from datetime import datetime, time
-
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from src.database.models import Base, Teacher, Course, Classroom, Lesson, Student, Attendance
 

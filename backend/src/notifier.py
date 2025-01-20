@@ -1,23 +1,14 @@
 import base64
 import os
 import time
-from functools import partial
-
-import requests
 from apprise import apprise
 from apprise.decorators import notify
-from apprise.plugins.fcm.priority import NotificationPriority
 from dotenv import load_dotenv
 from fastapi_mqtt import FastMQTT, MQTTConfig
 from loguru import logger
 import paho.mqtt.client as mqtt
-from paho.mqtt.client import MQTTMessage
 import json
-
 from src.models import Notification, Settings
-from src.database.database_config import DatabaseConfig
-from src.sheduler import LessonScheduler
-
 from src.config_file import update_config_file
 import aiohttp
 

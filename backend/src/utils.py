@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
-
 import pytz
 from dotenv import load_dotenv
+from src.config_file import get_mode
 
 load_dotenv('local.env')
 try:
@@ -12,6 +12,8 @@ except Exception as e:
     START_DATE = datetime.now()
 
 def __get_current_week(current_date=None):
+    if get_mode() == 'TEST':
+        return 1
     if current_date is None:
         current_date = datetime.now()
 

@@ -1,16 +1,12 @@
 import logging
-
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timedelta, date
 import pytz
 from dotenv import load_dotenv, set_key
 import os
-
 from sqlalchemy.orm import Session
 from src.database.models import Lesson, Attendance, Classroom
-
-from src.config_file import set_mode
-import asyncio
+from src.config_file import get_mode
 
 
 class LessonScheduler:
@@ -22,7 +18,6 @@ class LessonScheduler:
         self.handle_activity = handle_activity
         self.current_lesson_id = None
         self.time_before_lesson = 10
-
 
         # Load the .env file
         load_dotenv(self.env_path)
@@ -64,12 +59,16 @@ class LessonScheduler:
         return start_date
 
     def calculate_week_number(self):
+        if get_mode() == 'TEST':
+            return 1
         today = datetime.now(self.timezone).date()
         delta = today - self.start_date
         week_num = delta.days // 7 + 1  # Week number starts from 1
         return week_num
 
     def update_week_number(self):
+        if get_mode() == 'TEST':
+            return
         self.current_week_num = self.calculate_week_number()
         print(f"Updating week number to: {self.current_week_num}")
 
@@ -119,35 +118,34 @@ class LessonScheduler:
         self.current_lesson_id = next_lesson.id  # Update the current lesson tracker
 
     def schedule_lesson_jobs(self, lesson):
-      print(f"Scheduling jobs for lesson ID {lesson.id}.")
-      if lesson.course_id == 404:
-          self.__set_time_before_lesson(0)
-          print("TEST!!!")
-          set_mode("TEST")
-      else:
-          set_mode("NORMAL")
-          time_before = self.__check_how_much_time_before_lesson(lesson)
-          if time_before <= 10:  # порівнюємо з 10 хвилинами
-              self.__set_time_before_lesson(time_before)
-          else:
-              self.__set_time_before_lesson(10)
+        print(f"Scheduling jobs for lesson ID {lesson.id}.")
+        if lesson.course_id == 404:
+            self.__set_time_before_lesson(0)
+            print("TEST!!!")
+            # set_mode("TEST")
+        else:
+            # set_mode("NORMAL")
+            time_before = self.__check_how_much_time_before_lesson(lesson)
+            if time_before <= 10:  # порівнюємо з 10 хвилинами
+                self.__set_time_before_lesson(time_before)
+            else:
+                self.__set_time_before_lesson(10)
 
-      lesson_start_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.start_time))
-      start_notification_time = lesson_start_datetime - timedelta(minutes=self.time_before_lesson)
+        lesson_start_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.start_time))
+        start_notification_time = lesson_start_datetime - timedelta(minutes=self.time_before_lesson)
 
-      if datetime.now(self.timezone) < start_notification_time:
-          self.scheduler.add_job(
-              self.send_notification, 'date', run_date=start_notification_time, args=[lesson, 'start']
-          )
+        if datetime.now(self.timezone) < start_notification_time:
+            self.scheduler.add_job(
+                self.send_notification, 'date', run_date=start_notification_time, args=[lesson, 'start']
+            )
 
-      lesson_end_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.finish_time))
-      self.scheduler.add_job(
-          self.send_notification, 'date', run_date=lesson_end_datetime, args=[lesson, 'end']
-      )
-      self.scheduler.add_job(
-          self.mark_absences_for_lesson, 'date', run_date=lesson_end_datetime, args=[lesson.id]
-      )
-
+        lesson_end_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.finish_time))
+        self.scheduler.add_job(
+            self.send_notification, 'date', run_date=lesson_end_datetime, args=[lesson, 'end']
+        )
+        self.scheduler.add_job(
+            self.mark_absences_for_lesson, 'date', run_date=lesson_end_datetime, args=[lesson.id]
+        )
 
     def send_notification(self, lesson, action='start'):
         if action == 'start':
@@ -156,7 +154,6 @@ class LessonScheduler:
             self.handle_activity("sleep")
         else:
             print("Unknown action specified for notification.")
-
 
     def mark_absences_for_lesson(self, lesson_id):
         print(f"Marking absences for lesson ID {lesson_id} in week {self.current_week_num}.")
@@ -180,8 +177,6 @@ class LessonScheduler:
     def __set_time_before_lesson(self, time: int):
         self.time_before_lesson = time
 
-
-    
     #
     # async def send_notification(self, lesson, action='start'):
     #     if action == 'start':
@@ -216,7 +211,7 @@ class LessonScheduler:
     #
     #
     def __check_how_much_time_before_lesson(self, lesson):
-      now = datetime.now()
-      lesson_start_time = datetime.combine(now.date(), lesson.start_time)
-      time_difference = lesson_start_time - now
-      return int(time_difference.total_seconds() // 60)
+        now = datetime.now()
+        lesson_start_time = datetime.combine(now.date(), lesson.start_time)
+        time_difference = lesson_start_time - now
+        return int(time_difference.total_seconds() // 60)

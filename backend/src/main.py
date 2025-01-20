@@ -1,13 +1,8 @@
-import asyncio
 import json
 import logging
-import threading
-from contextlib import asynccontextmanager, contextmanager
 from functools import partial
-
 from dotenv import load_dotenv
-from fastapi import FastAPI, Depends, HTTPException
-from loguru import logger
+from fastapi import FastAPI, Depends
 from pydantic import BaseModel
 from src.database.database_config import DatabaseConfig
 from datetime import datetime, timedelta, timezone, date
@@ -15,7 +10,6 @@ from jose import jwt, JWTError
 from typing import List, Annotated
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from typing import Generator
 from src.database.models import (student_courses, student_lessons,
                                  teacher_courses, Course, Teacher, Classroom,
                                  Lesson, Student, Attendance, Classroom, User as UserM ,Transaction as TransactionM)
@@ -35,26 +29,19 @@ from src.utils import __get_current_week, get_date_details
 #                                          get_students_lessons_t)
 from src.database.database_query import *
 from src.utils import __get_current_week, get_date_details
-
-from src.notifier import fast_mqtt
-
 from src.config_file import set_classroom
-
 from src.sheduler import LessonScheduler
-
 from src.notifier import handle_activity
-
 from src.database.database_query import get_lesson_by_course_id
-
-import asyncio
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from loguru import logger
-from src.notifier import fast_mqtt  # Assuming you've imported your FastMQTT instance
-
+from src.notifier import fast_mqtt
 from src.database.database_query import __validate_lesson_request
-
 from src.database.database_query import __add_lesson, __add_students_to_lesson
+from src.config_file import set_mode
+from fastapi import HTTPException, Depends
+from sqlalchemy.orm import Session
 
 scheduler = None
 
@@ -165,6 +152,7 @@ async def get_lessons_attendance(lesson_id: int, session: Session = Depends(get_
 @app.get('/get_test_lesson')
 async def get_test_lesson(session: Session = Depends(get_db)):
     course_id = 404
+    # set_mode('TEST')
     course = get_course_by_id(course_id=course_id, session=session)
     if not course:
         raise HTTPException(status_code=400, detail=f"No course was found with lesson ID {course.id}")
@@ -194,6 +182,7 @@ async def get_test_lesson(session: Session = Depends(get_db)):
 @app.get("/delete_test_lesson")
 async def delete_test_lesson(session: Session = Depends(get_db)):
     course_id = 404
+    set_mode('NORMAL')
     course = get_course_by_id(course_id=course_id, session=session)
     if not course:
         raise HTTPException(status_code=400, detail=f"No course was found with lesson ID {lesson.id}")
@@ -237,10 +226,6 @@ async def get_lessons_attendance_for_student(lesson_id: int, student_id: int, se
 class IdentifierPayload(BaseModel):
     id: int
     dt: int
-
-
-from fastapi import HTTPException, Depends
-from sqlalchemy.orm import Session
 
 
 @app.post("/notifications/")
@@ -420,6 +405,9 @@ async def get_all_students_without_course(course_id: int, session: Session = Dep
 @app.post("/add_lesson/")
 async def add_lesson(lesson_request: LessonRequest, session: Session = Depends(get_db)):
     try:
+        if lesson_request.course_id == 404:
+            set_mode("TEST")
+
         __validate_lesson_request(lesson_request, session)
 
         start_time = lesson_request.start_time or datetime.now().time()
@@ -679,5 +667,6 @@ async def is_in_test_mode(session: Session = Depends(get_db)):
     # course = get_course_by_id(course_id=course_id, session=session)
     lesson = get_lesson_by_course_id(course_id = course_id, session=session)
     return {"is_in_test_mode": lesson is not None}
+
 
 

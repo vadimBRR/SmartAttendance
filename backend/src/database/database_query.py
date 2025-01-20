@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta, time
+from datetime import datetime, time
 from http.client import HTTPException
 from typing import List, Optional
 from pydantic import BaseModel
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 from src.database.models import (Student, Teacher, Course, Lesson,
                                  Attendance, Classroom, student_courses, teacher_courses,
@@ -10,6 +9,7 @@ from src.database.models import (Student, Teacher, Course, Lesson,
 from src.config_file import get_classroom_id
 
 from src.utils import __is_valid_day_format
+from datetime import datetime, timedelta
 
 
 class AttendanceInfo(BaseModel):
@@ -419,13 +419,6 @@ def get_teacher_courses(teacher_id: int, session = None):
     ).filter(
         teacher_courses.c.teacher_id == teacher_id
     ).all()
-
-from datetime import datetime, timedelta
-
-from datetime import datetime, timedelta
-
-from datetime import datetime, timedelta
-
 
 def get_lesson_by_classroom_time(arrival_time, day_of_week: str, session=None):
     if not session:
