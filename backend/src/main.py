@@ -203,10 +203,10 @@ async def delete_test_lesson(session: Session = Depends(get_db)):
     course_id = 404
     course = get_course_by_id(course_id=course_id, session=session)
     if not course:
-        raise HTTPException(status_code=400, detail=f"No course was found with lesson ID {lesson_id}")
+        raise HTTPException(status_code=400, detail=f"No course was found with lesson ID {lesson.id}")
     lesson = get_lesson_by_course_id(course_id=course_id, session=session)
     if not lesson:
-        raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson_id}")
+        raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson.id}")
     delete_lesson_by_id(lesson_id=lesson.id, session=session)
     session.query(student_courses).filter(student_courses.c.course_id == course_id).delete(synchronize_session='fetch')
     session.commit()
