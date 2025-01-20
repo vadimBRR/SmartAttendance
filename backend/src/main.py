@@ -676,8 +676,8 @@ async def get_current_classroom(session: Session = Depends(get_db)):
 @app.get("/is_test")
 async def is_in_test_mode(session: Session = Depends(get_db)):
     course_id = 404
-    course = get_course_by_id(course_id=course_id, session=session)
-
-    return {"is_in_test_mode": course is not None}
+    # course = get_course_by_id(course_id=course_id, session=session)
+    lesson = get_lesson_by_course_id(course_id = course_id, session=session)
+    return {"is_in_test_mode": lesson is not None}
 
 
