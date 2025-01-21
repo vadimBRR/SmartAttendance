@@ -25,8 +25,7 @@ from src.utils import __get_current_week, get_date_details
 #                                          get_classroom_by_id, __add_students_to_lesson, __add_lesson, __validate_lesson_request, LessonRequest, \
 #                                          get_lesson_by_id, get_student_attendance_by_week, report_attendance, \
 #                                          get_all_students_not_assigned_to_course, get_teacher_lessons, get_teacher_courses, \
-#                                          get_lesson_by_classroom_time, get_all_student_attendance, is_student_assigned_to_a_lesson, get_classroom_by_name,
-#                                          get_students_lessons_t)
+#                                          get_lesson_by_classroom_time, get_all_student_attendance, is_student_assigned_to_a_lesson, get_classroom_by_name,)
 from src.database.database_query import *
 from src.utils import __get_current_week, get_date_details
 from src.config_file import set_classroom
@@ -42,6 +41,8 @@ from src.database.database_query import __add_lesson, __add_students_to_lesson
 from src.config_file import set_mode
 from fastapi import HTTPException, Depends
 from sqlalchemy.orm import Session
+
+from src.database.database_query import get_students_lessons
 
 scheduler = None
 
@@ -174,7 +175,9 @@ async def get_test_lesson(session: Session = Depends(get_db)):
             "course_name": course.name,
             "short_course_name": course.short_name,
             "lesson_id": lesson.id,
-            "attendance": attendance_records
+            "attendance": attendance_records,
+            "start_time": lesson.start_time,
+            "finish_time": lesson.finish_time
         })
 
     return {"students": students_data}
@@ -192,6 +195,7 @@ async def delete_test_lesson(session: Session = Depends(get_db)):
     delete_lesson_by_id(lesson_id=lesson.id, session=session)
     session.query(student_courses).filter(student_courses.c.course_id == course_id).delete(synchronize_session='fetch')
     session.commit()
+    scheduler.cancel_or_finish_lesson(lesson_id=lesson.id, finish_immediately=True)
 
 
 @app.get("/lessons{lesson_id}/attendance/{student_id}")
@@ -328,14 +332,15 @@ async def get_lessons_by_teacher(
         session.close()
 
 
-@app.get("/lessons/student/{student_id} ")
+@app.get("/lessons/student/{student_id}")
 async def get_lessons_by_student(
         student_id: int,
         session: Session = Depends(get_db)
 ):
     try:
-        lessons = get_students_lessons_t(student_id=student_id, session=session)
+        lessons = get_students_lessons(student_id=student_id, session=session)
         result = {}
+        return lessons
         for lesson in lessons:
             course = get_course_by_id(lesson.course_id, session=session)
 
@@ -352,7 +357,6 @@ async def get_lessons_by_student(
     except Exception as e:
         print(f"An error occurred: {str(e)}")
         return {"lessons": []}
-
     finally:
         pass
 
@@ -458,6 +462,8 @@ async def add_lesson(lesson_request: LessonRequest, session: Session = Depends(g
 @app.get('/delete/lesson_{lesson_id}')
 async def delete_lesson(lesson_id: int, session: Session = Depends(get_db)):
     delete_lesson_by_id(lesson_id = lesson_id, session=session)
+    scheduler.cancel_or_finish_lesson(lesson_id=lesson_id, finish_immediately=True)
+
 
 class Transaction(BaseModel):
     amount: float

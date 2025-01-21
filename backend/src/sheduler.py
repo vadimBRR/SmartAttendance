@@ -18,6 +18,7 @@ class LessonScheduler:
         self.handle_activity = handle_activity
         self.current_lesson_id = None
         self.time_before_lesson = 10
+        self.scheduled_jobs = {}
 
         # Load the .env file
         load_dotenv(self.env_path)
@@ -119,33 +120,35 @@ class LessonScheduler:
 
     def schedule_lesson_jobs(self, lesson):
         print(f"Scheduling jobs for lesson ID {lesson.id}.")
-        if lesson.course_id == 404:
-            self.__set_time_before_lesson(0)
-            print("TEST!!!")
-            # set_mode("TEST")
-        else:
-            # set_mode("NORMAL")
-            time_before = self.__check_how_much_time_before_lesson(lesson)
-            if time_before <= 10:  # порівнюємо з 10 хвилинами
-                self.__set_time_before_lesson(time_before)
-            else:
-                self.__set_time_before_lesson(10)
+        lesson_jobs = []
 
         lesson_start_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.start_time))
         start_notification_time = lesson_start_datetime - timedelta(minutes=self.time_before_lesson)
 
         if datetime.now(self.timezone) < start_notification_time:
-            self.scheduler.add_job(
+            start_job = self.scheduler.add_job(
                 self.send_notification, 'date', run_date=start_notification_time, args=[lesson, 'start']
             )
+            lesson_jobs.append(start_job)
 
         lesson_end_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.finish_time))
-        self.scheduler.add_job(
+        end_job = self.scheduler.add_job(
             self.send_notification, 'date', run_date=lesson_end_datetime, args=[lesson, 'end']
         )
-        self.scheduler.add_job(
+        lesson_jobs.append(end_job)
+
+        absence_job = self.scheduler.add_job(
             self.mark_absences_for_lesson, 'date', run_date=lesson_end_datetime, args=[lesson.id]
         )
+        lesson_jobs.append(absence_job)
+
+        clear_job = self.scheduler.add_job(
+            self.clear_if_no_lessons, 'date', run_date=lesson_end_datetime, args=[lesson.id]
+        )
+        lesson_jobs.append(clear_job)
+
+        self.scheduled_jobs[lesson.id] = lesson_jobs
+
 
     def send_notification(self, lesson, action='start'):
         if action == 'start':
@@ -177,41 +180,34 @@ class LessonScheduler:
     def __set_time_before_lesson(self, time: int):
         self.time_before_lesson = time
 
-    #
-    # async def send_notification(self, lesson, action='start'):
-    #     if action == 'start':
-    #         await self.handle_activity("wake_up")
-    #     elif action == 'end':
-    #         await self.handle_activity("sleep")
-    #     else:
-    #         print("Unknown action specified for notification.")
-    #
-    #
-    # def mark_absences_for_lesson(self, lesson_id):
-    #     print(f"Marking absences for lesson ID {lesson_id} in week {self.current_week_num}.")
-    #
-    #     unrecorded_attendances = self.session.query(Attendance).filter(
-    #         Attendance.lesson_id == lesson_id,
-    #         Attendance.present.is_(None),
-    #         Attendance.week_number == self.current_week_num
-    #     ).all()
-    #
-    #     for attendance in unrecorded_attendances:
-    #         attendance.present = False  # Mark as absent
-    #         print(f"Marked student {attendance.student_id} as absent for lesson {lesson_id}.")
-    #
-    #     try:
-    #         self.session.commit()
-    #     except Exception as e:
-    #         print(f"Error committing changes to the database: {e}")
-    #         self.session.rollback()
-    #
-    # def __set_time_before_lesson(self, time: int):
-    #     self.time_before_lesson = time
-    #
-    #
     def __check_how_much_time_before_lesson(self, lesson):
         now = datetime.now()
         lesson_start_time = datetime.combine(now.date(), lesson.start_time)
         time_difference = lesson_start_time - now
         return int(time_difference.total_seconds() // 60)
+
+    def clear_if_no_lessons(self, lesson_id: int):
+        if self.current_lesson_id == lesson_id:
+            self.current_lesson_id = None
+
+    def cancel_or_finish_lesson(self, lesson_id, finish_immediately=False):
+        if lesson_id in self.scheduled_jobs:
+            # Remove all jobs for the lesson
+
+            for job in self.scheduled_jobs[lesson_id]:
+                self.scheduler.remove_job(job.id)
+            print(f"All jobs for lesson ID {lesson_id} have been canceled.")
+
+            # Optionally finish the lesson immediately
+            if finish_immediately:
+                print(f"Finishing lesson ID {lesson_id} immediately.")
+                self.send_notification(lesson_id, action='end')
+                self.mark_absences_for_lesson(lesson_id)
+                self.clear_if_no_lessons(lesson_id)
+
+            # Remove lesson from tracking
+            del self.scheduled_jobs[lesson_id]
+        else:
+            print(f"No jobs found for lesson ID {lesson_id}.")
+
+

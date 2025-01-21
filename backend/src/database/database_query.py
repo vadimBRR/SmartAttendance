@@ -120,7 +120,7 @@ def is_student_assigned_to_a_course(lesson: Lesson, student: Student, session = 
 def is_student_assigned_to_a_lesson(lesson_id, student_id, session = None):
     if session is None:
         return
-    students_lessons = get_students_lessons_t(student_id=student_id, session=session)
+    students_lessons = get_students_lessons(student_id=student_id, session=session)
     lesson_ids = [lesson.id for lesson in students_lessons]
     if lesson_id in lesson_ids:
         return True
@@ -379,7 +379,7 @@ def report_attendance(attendance: Attendance, present: bool, arrival_time, sessi
     attendance.present = present
     attendance.arrival_time = arrival_time
 
-def get_students_lessons_t(student_id: int, session = None):
+def get_students_lessons(student_id: int, session = None):
     if session is None:
         return
     return session.query(Lesson).filter(
