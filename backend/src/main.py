@@ -340,7 +340,6 @@ async def get_lessons_by_student(
     try:
         lessons = get_students_lessons(student_id=student_id, session=session)
         result = {}
-        return lessons
         for lesson in lessons:
             course = get_course_by_id(lesson.course_id, session=session)
 
