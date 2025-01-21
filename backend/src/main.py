@@ -65,8 +65,9 @@ async def lifespan(_app: FastAPI):
 
         yield
     finally:
-        await fast_mqtt.mqtt_shutdown()
-        logging.info("Shutdown event triggered.")
+        if fast_mqtt:
+            await fast_mqtt.mqtt_shutdown()
+            logging.info("Shutdown event triggered.")
 
         if scheduler:
             scheduler.shutdown()
@@ -74,6 +75,9 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+@app.get("/")
+def read_root():
+    return {"message": "Hello, FastAPI!"}
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
