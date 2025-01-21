@@ -637,11 +637,11 @@ async def change_classroom(classroom_id: int, session: Session = Depends(get_db)
         # Prepare the payload
         payload = {
             "classroom_id": classroom_id,
-            "classroom_name": classroom_name
+            "current_class": classroom_name
         }
 
         # Publish the payload to the MQTT topic
-        base_topic = "kpi/endor/404_beta"  # Replace with your base topic
+        base_topic = "gw/404_beta"  # Replace with your base topic
         topic = f"{base_topic}/config"
         fast_mqtt.publish(topic, json.dumps(payload))
         logger.debug(f"Sent a command: {classroom_id}")# Removed `await`
