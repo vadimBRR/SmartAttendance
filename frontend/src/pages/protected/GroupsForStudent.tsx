@@ -3,11 +3,11 @@ import GroupItem from '../../components/Group/GroupItem';
 import EmptyGroupItem from '../../components/Group/EmptyGroupItem';
 import Modal from '../../components/Modal'; 
 import { LogOut } from 'lucide-react'; 
-import { useLessons, useLessonsByStudent } from '../../hooks/useApi';
+import { useIsTest, useLessons, useLessonsByStudent } from '../../hooks/useApi';
 import { useAuth } from '../../providers/AuthProvider';
 
 const time = ['7:30', '9:10', '10:50', '13:30', '15:10'];
-const finished_time = ['9:00', '10:40', '12:20', '15:00', '16:40']; // Додано масив finished_time
+const finished_time = ['9:00', '10:40', '12:20', '15:00', '16:40'];
 
 const week_days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -41,10 +41,12 @@ const GroupsForStudent = () => {
   const courseId = '1';
   const teacherId = useAuth().userId || '-1';
   const { data, isLoading, error } = useLessonsByStudent(teacherId);
+  const { data: isTest, isLoading: isTestLoading, error: testError } = useIsTest();
+  
   const { logout, email } = useAuth(); 
   console.log(email);
 
-  if (isLoading) return <p>Loading...</p>;
+  if (isLoading || isTestLoading) return <p>Loading...</p>;
   if (error) return <p>Error: {(error as Error).message}</p>;
 
   const lessons: Record<string, any> = data?.lessons || {};
@@ -71,7 +73,13 @@ const GroupsForStudent = () => {
           </button>
         </div>
       </div>
-
+      <div className="relative">
+      {isTest?.is_in_test_mode && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-50 z-10">
+          <span className="text-white text-2xl font-bold mb-4">Currently in Test Mode</span>
+         
+        </div>
+        )}
       <div className="flex flex-col gap-2 bg-white rounded shadow pb-2">
         <div
           className="grid gap-x-4"
@@ -107,7 +115,7 @@ const GroupsForStudent = () => {
 
               const id = lessonEntry ? parseInt(lessonEntry[0]) : null;
               const lesson = lessonEntry ? lessonEntry[1] : null;
-              const finishTime = finished_time[colIndex]; // Тепер використовуємо finished_time з масиву
+              const finishTime = finished_time[colIndex]; 
 
               return lesson ? (
                 <GroupItem
@@ -115,7 +123,7 @@ const GroupsForStudent = () => {
                   id={id}
                   group={{
                     start_time: lesson.start_time,
-                    finish_time: finishTime, // Використовуємо finished_time
+                    finish_time: finishTime, 
                     short_course_name: lesson.short_course_name,
                   }}
                 />
@@ -124,7 +132,7 @@ const GroupsForStudent = () => {
                   key={`${rowIndex}-${colIndex}`}
                   day={day}
                   start_time={time[colIndex]}
-                  finish_time={finishTime} // Використовуємо finishTime з масиву finished_time
+                  finish_time={finishTime} 
                   course_id={parseInt(courseId!)}
                 />
               );
@@ -132,7 +140,7 @@ const GroupsForStudent = () => {
           </div>
         ))}
       </div>
-
+</div>
       <div className="mt-6 p-4 bg-gray-100 rounded shadow">
         <h2 className="text-lg font-semibold text-gray-800 mb-2">Legend:</h2>
         <ul className="list-disc list-inside text-gray-600">

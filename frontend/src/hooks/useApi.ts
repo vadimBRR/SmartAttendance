@@ -41,8 +41,8 @@ export const useAddLesson = () => {
   });
 };
 export const useAddLessonAttendance = (lessonId: number, isTest = false) => {
-  const { refetch: refetchLessonAttendance } = useLessonAttendance(lessonId);
-  const { refetch: refetchTestLesson } = useTestLesson();
+  const { refetch: refetchLessonAttendance } = isTest ? { refetch: () => {} } : useLessonAttendance(lessonId);
+  const { refetch: refetchTestLesson } = !isTest ? { refetch: () => {} } : useTestLesson();
 
   return useMutation({
     mutationFn: ({
@@ -58,18 +58,19 @@ export const useAddLessonAttendance = (lessonId: number, isTest = false) => {
     }) => addLessonAttendance({ lessonId, weekNumber, studentId, present }),
     onSuccess: () => {
       console.log('Attendance added successfully');
-      if(isTest){
-        refetchTestLesson();
-      }else{
-        refetchLessonAttendance(); 
+      
+      if (isTest) {
+        refetchTestLesson();  
+      } else {
+        refetchLessonAttendance();  
       }
-
     },
     onError: (error: any) => {
       console.error('Failed to add attendance:', error.message || error);
     },
   });
 };
+
 
 export const useCurrentWeek = () => {
   return useQuery({

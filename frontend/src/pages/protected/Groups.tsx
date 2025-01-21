@@ -5,9 +5,10 @@ import Modal from '../../components/Modal';
 import { Monitor, LogOut } from 'lucide-react'; 
 import { useIsTest, useLessons } from '../../hooks/useApi';
 import { useAuth } from '../../providers/AuthProvider';
+import { useNavigate } from 'react-router-dom'
 
 const time = ['7:30', '9:10', '10:50', '13:30', '15:10'];
-const finished_time = ['9:00', '10:40', '12:20', '15:00', '16:40']; // Масив з часом закінчення уроків
+const finished_time = ['9:00', '10:40', '12:20', '15:00', '16:40'];
 
 const week_days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -38,19 +39,29 @@ const formatTime = (timeStr: string) => {
 };
 
 const Groups = () => {
+  const navigate = useNavigate();
   const [isModalOpen, setModalOpen] = useState(false); 
   const courseId = '1';
   const teacherId = useAuth().userId || 0;
   const { data, isLoading, error } = useLessons(teacherId || '');
+  const { data: isTest, isLoading: isTestLoading, error: testError } = useIsTest();
+
+  console.log("istest", isTest);
 
   const { logout, email } = useAuth(); 
-  console.log(email);
   const toggleModal = () => setModalOpen(!isModalOpen);
 
-  if (isLoading) return <p>Loading...</p>;
+  if (isLoading || isTestLoading) return <p>Loading...</p>;
   if (error) return <p>Error: {(error as Error).message}</p>;
 
   const lessons: Record<string, any> = data?.lessons || {};
+
+  const handleOpentest = () => {
+    console.log("Test Mode Started");
+    navigate('/attendance_test');
+  };
+
+
 
   let idCounter = 1;
 
@@ -82,67 +93,84 @@ const Groups = () => {
         </div>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={toggleModal}></Modal>
+      <Modal isOpen={isModalOpen} onClose={toggleModal} isTest={isTest?.is_in_test_mode}></Modal>
+      
+      <div className="relative">
+        {isTest?.is_in_test_mode && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-50 z-10">
+          <span className="text-white text-2xl font-bold mb-4">Currently in Test Mode</span>
+          <div className="flex justify-center gap-4">
+              <button
+                className="bg-green-500 text-white p-2 rounded"
+                onClick={handleOpentest}
+              >
+                Go to Test Mode
+              </button>
 
-      <div className="flex flex-col gap-2 bg-white rounded shadow pb-2">
-        <div
-          className="grid gap-x-4"
-          style={{ gridTemplateColumns: `100px repeat(${time.length}, 1fr)` }}
-        >
-          <div></div>
-          {time.map((t, index) => (
+          </div>
+        </div>
+        )}
+
+        <div className={`flex flex-col gap-2 bg-white rounded shadow pb-2 ${isTest?.is_in_test_mode ? 'blur-sm pointer-events-none' : ''}`}>
+          <div
+            className={`grid gap-x-4`}
+            style={{ gridTemplateColumns: `100px repeat(${time.length}, 1fr)` }}
+          >
+            <div></div>
+            {time.map((t, index) => (
+              <div
+                key={index}
+                className="text-center font-bold text-gray-800 border-b"
+              >
+                {t}
+              </div>
+            ))}
+          </div>
+
+          {week_days.map((day, rowIndex) => (
             <div
-              key={index}
-              className="text-center font-bold text-gray-800 border-b"
+              key={rowIndex}
+              className={`grid gap-x-4 mr-3 ${isTest?.is_in_test_mode ? 'blur-sm' : ''}`}
+              style={{ gridTemplateColumns: `100px repeat(${time.length}, 1fr)` }}
             >
-              {t}
+              <div className="text-center font-bold text-gray-800 border-r flex items-center justify-center ">
+                {day}
+              </div>
+
+              {time.map((t, colIndex) => {
+                const lessonEntry = Object.entries(lessons || {}).find(
+                  ([id, l]: [string, any]) =>
+                    normalizeDay(l.day_of_week) === normalizeDay(day) &&
+                    formatTime(l.start_time) === t
+                );
+
+                const id = lessonEntry ? parseInt(lessonEntry[0]) : null;
+                const lesson = lessonEntry ? lessonEntry[1] : null;
+                const finishTime = finished_time[colIndex] || "16:40"; 
+
+                return lesson ? (
+                  <GroupItem
+                    key={`${rowIndex}-${colIndex}`}
+                    id={id}
+                    group={{
+                      start_time: lesson.start_time,
+                      finish_time: finishTime,
+                      short_course_name: lesson.short_course_name,
+                    }}
+                  />
+                ) : (
+                  <EmptyGroupItem
+                    key={`${rowIndex}-${colIndex}`}
+                    day={day}
+                    start_time={time[colIndex]}
+                    finish_time={finishTime}
+                    course_id={parseInt(courseId!)}
+                  />
+                );
+              })}
             </div>
           ))}
         </div>
-
-        {week_days.map((day, rowIndex) => (
-          <div
-            key={rowIndex}
-            className="grid gap-x-4 mr-3"
-            style={{ gridTemplateColumns: `100px repeat(${time.length}, 1fr)` }}
-          >
-            <div className="text-center font-bold text-gray-800 border-r flex items-center justify-center ">
-              {day}
-            </div>
-
-            {time.map((t, colIndex) => {
-              const lessonEntry = Object.entries(lessons || {}).find(
-                ([id, l]: [string, any]) =>
-                  normalizeDay(l.day_of_week) === normalizeDay(day) &&
-                  formatTime(l.start_time) === t
-              );
-
-              const id = lessonEntry ? parseInt(lessonEntry[0]) : null;
-              const lesson = lessonEntry ? lessonEntry[1] : null;
-              const finishTime = finished_time[colIndex] || "16:40"; // Використовуємо значення з finished_time
-
-              return lesson ? (
-                <GroupItem
-                  key={`${rowIndex}-${colIndex}`}
-                  id={id}
-                  group={{
-                    start_time: lesson.start_time,
-                    finish_time: finishTime, // Тепер використовуємо finished_time
-                    short_course_name: lesson.short_course_name,
-                  }}
-                />
-              ) : (
-                <EmptyGroupItem
-                  key={`${rowIndex}-${colIndex}`}
-                  day={day}
-                  start_time={time[colIndex]}
-                  finish_time={finishTime} // Використовуємо finishTime з масиву finished_time
-                  course_id={parseInt(courseId!)}
-                />
-              );
-            })}
-          </div>
-        ))}
       </div>
 
       <div className="mt-6 p-4 bg-gray-100 rounded shadow">

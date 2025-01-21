@@ -75,11 +75,12 @@ const CreateGroup = () => {
 	]
 
 	useEffect(() => {
-		if (students && selectedCourseId) {
+		if (students && selectedCourseId ) {
 			setAttendance(
 				students.reduce(
 					(acc: Record<number, (boolean | null)[]>, student: Student) => {
-						acc[student.id] = Array(current_week).fill(true)
+            
+						acc[student.id] = Array(current_week).fill(isTest ? null : true)
 						return acc
 					},
 					{} as Record<number, (boolean | null)[]>
@@ -105,15 +106,17 @@ const CreateGroup = () => {
 	}
 
 	const cycleAttendance = (studentId: number, weekIndex: number) => {
-		setAttendance(prev => ({
-			...prev,
-			[studentId]: prev[studentId].map((value, index) => {
-				if (index !== weekIndex) return value
-				if (value === true) return false
-				if (value === false) return null
-				return true
-			}),
-		}))
+    if(!isTest){
+        setAttendance(prev => ({
+          ...prev,
+          [studentId]: prev[studentId].map((value, index) => {
+            if (index !== weekIndex) return value
+            if (value === true) return false
+            if (value === false) return null
+            return true
+          }),
+        }))
+    }
 	}
 
 	const [isFormSubmitted, setIsFormSubmitted] = useState(false)
@@ -165,11 +168,11 @@ const CreateGroup = () => {
   
     if (isTest) {
       const now = new Date();
-      const duration1 = parseInt('11', 10) || 0;
 
-      startTime = formatTime(calculateFinishTime(now, 11));
-      const duration = parseInt(testDuration, 10) || 0;
-      finishTime = formatTime(calculateFinishTime(now, duration));
+      startTime = formatTime(calculateFinishTime(now, 2));
+      const duration = parseInt(testDuration) || 0;
+      console.log(duration);
+      finishTime = formatTime(calculateFinishTime(now, duration+2));
     }
   
     const payload = {
