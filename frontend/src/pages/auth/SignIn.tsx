@@ -13,6 +13,8 @@ const SignIn = () => {
     await login(email, password)
 
   }
+
+  console.log("TESTTTTTTTTTTTTT")
   return (
     <div>
       <div className='flex flex-col justify-center items-center bg-gray-400/10 py-6 px-12 rounded-xl' style={
@@ -25,7 +27,7 @@ const SignIn = () => {
         <CustomInput name={email} setName={setEmail} title='Username' containerStyle='my-4'/>
         <CustomInput name={password} setName={setPassword} title='Password' containerStyle='my-4' isPassword={true}/>
         <CustomButton handleClick={handleLogin} text='Sign In' isLoading={isLoading}/>
-        <p className="text-[#ff0000] mb-2">{error}</p>
+        {/*<p className="text-[#ff0000] mb-2">{error}</p>*/}
         <div className='flex flex-row gap-1'>
           <p>Don't have an account?</p>
           <Link to='/sign-up'>

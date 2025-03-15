@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  backend:
+    image: lerrxws/smartattendance-backend:latest  # Use the pushed backend image
+    ports:
+      - "8000:8000"  # Map host port 8000 to container port 8000 # Persist SQLite database
+    environment:
+      ENV: production  # Set environment variable for backend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+    logging: # Configure logging
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    image: lerrxws/smartattendance-frontend:latest  # Use the pushed frontend image
+    ports:
+      - "5173:5173"  # Map host port 5173 to container port 5173
+    environment:
+      NODE_ENV: development  # Set environment variable for frontend

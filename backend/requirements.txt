@@ -9,3 +9,13 @@ paho-mqtt
 apscheduler
 pytz
 sqlalchemy
+fastapi
+uvicorn[standard]
+python-jose[cryptography]
+passlib[bcrypt]
+aiohttp
+typing-extensions
+fastapi-mqtt
+python-multipart
+aiohttp_cors
+asyncio

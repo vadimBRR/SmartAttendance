@@ -11,6 +11,8 @@ const SignUp = () => {
 	const handleRegister = async () => {
 		await register(email, password)
 	}
+  	console.log("TESTTTTTTTTTTTTT")
+
 	return (
 		<div
 			className='flex flex-col justify-center items-center bg-gray-400/10 py-6 px-12 rounded-xl'
@@ -37,7 +39,7 @@ const SignUp = () => {
 				text='Sign Up'
 				isLoading={isLoading}
 			/>
-			<p className='text-[#ff0000] mb-2'>{error}</p>
+			{/*<p className="text-[#ff0000] mb-2">{error}</p>*/}
 			<div className='flex flex-row gap-1'>
 				<p>Already have an account? </p>
 				<Link to='/sign-in'>

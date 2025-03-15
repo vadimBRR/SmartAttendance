@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from src.database.models import (student_courses, student_lessons,
                                  teacher_courses, Course, Teacher, Classroom,
-                                 Lesson, Student, Attendance, Classroom, User as UserM ,Transaction as TransactionM)
+                                 Lesson, Student, Attendance, Classroom, User as UserM, Transaction as TransactionM)
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from src.config_file import *
@@ -75,6 +75,8 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
 @app.get("/")
 def read_root():
     return {"message": "Hello, FastAPI!"}
@@ -97,7 +99,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -108,14 +110,13 @@ load_dotenv('local.env')
 db_config = DatabaseConfig(echo_flag=False)
 db_config.init_db()
 
+
 def get_db() -> Session:
     session = db_config.get_session()
     try:
         yield session
     finally:
         session.close()
-
-
 
 
 @app.get("/lessons{lesson_id}/attendance")
@@ -125,7 +126,7 @@ async def get_lessons_attendance(lesson_id: int, session: Session = Depends(get_
         if not lesson:
             raise HTTPException(status_code=400, detail=f"No lesson found with ID {lesson_id}")
 
-        course = get_course_by_id(course_id = lesson.course_id, session=session)
+        course = get_course_by_id(course_id=lesson.course_id, session=session)
         if not course:
             raise HTTPException(status_code=400, detail=f"No course was found with lesson ID {lesson_id}")
         students = lesson.students
@@ -186,6 +187,7 @@ async def get_test_lesson(session: Session = Depends(get_db)):
 
     return {"students": students_data}
 
+
 @app.get("/delete_test_lesson")
 async def delete_test_lesson(session: Session = Depends(get_db)):
     course_id = 404
@@ -211,7 +213,8 @@ async def get_lessons_attendance_for_student(lesson_id: int, student_id: int, se
             raise HTTPException(status_code=400, detail=f"No such student with ID {student_id} in db.")
 
         if not is_student_assigned_to_a_lesson(student_id=student_id, lesson_id=lesson_id, session=session):
-            raise HTTPException(status_code=400, detail=f"Student with ID {student_id} does not have lesson with ID {lesson_id}.")
+            raise HTTPException(status_code=400,
+                                detail=f"Student with ID {student_id} does not have lesson with ID {lesson_id}.")
 
         attendances = get_all_student_attendance(lesson_id=lesson_id, student_id=student_id, session=session)
         course = get_course_by_id(lesson_id, session=session)
@@ -252,7 +255,7 @@ async def receive_attendance(
         week_num = date_info['week_num']
         arrival_time = date_info['arrival_time']
         day_of_week = date_info['day_of_week']
-        
+
         print(arrival_time)
 
         # Retrieve the lesson for the given time slot
@@ -264,7 +267,7 @@ async def receive_attendance(
         lesson_id = lesson.id
         if not lesson_id:
             print("here2")
-          
+
             raise HTTPException(status_code=404, detail="There is no lesson right now.")
 
         # Record attendance for the student
@@ -363,6 +366,7 @@ async def get_lessons_by_student(
     finally:
         pass
 
+
 @app.post("/lessons/lesson_{lesson_id}/attendance/{week_number}/{student_id}")
 async def post_lesson_attendance(
         lesson_id: int,
@@ -396,6 +400,7 @@ async def post_lesson_attendance(
         session.rollback()
     finally:
         session.close()
+
 
 @app.get("/create_group")
 async def get_all_students_without_course(course_id: int, session: Session = Depends(get_db)):
@@ -434,8 +439,14 @@ async def add_lesson(lesson_request: LessonRequest, session: Session = Depends(g
         # assign students to the lesson
         added_students_attendance = __add_students_to_lesson(lesson=lesson, students_info=lesson_request.students,
                                                              start_time=start_time, finish_time=finish_time,
-                                                             day_of_week=lesson_request.day_of_week, current_week=current_week, session=session)
+                                                             day_of_week=lesson_request.day_of_week,
+                                                             current_week=current_week, session=session)
 
+        if lesson_request.course_id == 404:
+            set_mode("TEST")
+            base_topic = "gw/404_beta"  # Replace with your base topic
+            topic = f"{base_topic}/command"
+            fast_mqtt.publish(topic, 'wake_up', retain=True)  # Не використовуємо json.dumps
         return {
             "message": "Lesson created and students' attendance successfully added.",
             "lesson": {
@@ -464,7 +475,7 @@ async def add_lesson(lesson_request: LessonRequest, session: Session = Depends(g
 
 @app.get('/delete/lesson_{lesson_id}')
 async def delete_lesson(lesson_id: int, session: Session = Depends(get_db)):
-    delete_lesson_by_id(lesson_id = lesson_id, session=session)
+    delete_lesson_by_id(lesson_id=lesson_id, session=session)
     scheduler.cancel_or_finish_lesson(lesson_id=lesson_id, finish_immediately=True)
 
 
@@ -482,19 +493,19 @@ class TransactionModel(BaseModel):
     class Config:
         from_attributes = True
 
+
 class UserCreate(BaseModel):
     email: str  # Замість email
     password: str
 
+
 class TokenData(BaseModel):
     email: str  # Замість email
+
 
 class User(BaseModel):
     id: int
     email: str  # Замість email
-
-
-
 
 
 db_dependency = Annotated[Session, Depends(get_db)]
@@ -509,6 +520,7 @@ async def create_transaction(transaction: Transaction, db: db_dependency):
     db.refresh(db_transaction)
     return db_transaction
 
+
 @app.get("/transactions/", response_model=List[TransactionModel])
 async def read_transactions(db: db_dependency, skip: int = 0, limit: int = 100):
     return db.query(TransactionM).offset(skip).limit(limit).all()
@@ -518,6 +530,7 @@ async def read_transactions(db: db_dependency, skip: int = 0, limit: int = 100):
 def get_user_by_email(email: str, db: db_dependency):
     return db.query(UserM).filter(UserM.email == email).first()
 
+
 def create_user(user: UserCreate, db: db_dependency):
     hashed_password = pwd_context.hash(user.password)
     db_user = UserM(email=user.email, hashed_password=hashed_password)
@@ -526,12 +539,14 @@ def create_user(user: UserCreate, db: db_dependency):
     db.refresh(db_user)
     return db_user
 
+
 @app.post('/register/')
 def register(user: UserCreate, db: Session = Depends(get_db)):
     db_user = get_user_by_email(user.email, db)
     if db_user:
         raise HTTPException(status_code=400, detail="Email already exists")
     return create_user(user, db)
+
 
 # Login
 def authenticate_user(email: str, password: str, db: Session):
@@ -542,6 +557,7 @@ def authenticate_user(email: str, password: str, db: Session):
         return False
     return user
 
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     if expires_delta:
@@ -551,7 +567,6 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
-
 
 
 @app.post('/token/')
@@ -569,6 +584,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     )
     return {"access_token": access_token, "token_type": "bearer", "email": user.email}
 
+
 # Verify Token
 def verify_token(token: str = Depends(oauth2_scheme)):
     try:
@@ -580,10 +596,12 @@ def verify_token(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise HTTPException(status_code=403, detail="Token is invalid or expired")
 
+
 @app.get('/verify-token/{token}')
 async def verify_user_token(token: str):
     verify_token(token)
     return {"message": "Token is valid"}
+
 
 @app.get('/verify-email/teacher')
 async def verify_email(email: str,
@@ -608,9 +626,11 @@ async def verify_email(email: str,
     finally:
         session.close()
 
+
 @app.get('/get-current-week')
 async def get_current_week():
     return __get_current_week()
+
 
 @app.get('/get-pico-state')
 async def get_pico_state():
@@ -644,7 +664,7 @@ async def change_classroom(classroom_id: int, session: Session = Depends(get_db)
         base_topic = "gw/404_beta"  # Replace with your base topic
         topic = f"{base_topic}/config"
         fast_mqtt.publish(topic, json.dumps(payload))
-        logger.debug(f"Sent a command: {classroom_id}")# Removed `await`
+        logger.debug(f"Sent a command: {classroom_id}")  # Removed `await`
 
         return {
             "status": "success",
@@ -663,10 +683,12 @@ async def get_classrooms(session: Session = Depends(get_db)):
         {"id": classroom.id, "label": classroom.name}
         for classroom in classrooms
     ]
+
+
 @app.get('/get-current-classroom')
 async def get_current_classroom(session: Session = Depends(get_db)):
     current_classroom = get_classroom_id()
-    classroom = get_classroom_by_name(classroom_id = current_classroom, session=session)
+    classroom = get_classroom_by_name(classroom_id=current_classroom, session=session)
     return {"id": classroom.id, "label": classroom.name}
 
 
@@ -674,8 +696,5 @@ async def get_current_classroom(session: Session = Depends(get_db)):
 async def is_in_test_mode(session: Session = Depends(get_db)):
     course_id = 404
     # course = get_course_by_id(course_id=course_id, session=session)
-    lesson = get_lesson_by_course_id(course_id = course_id, session=session)
+    lesson = get_lesson_by_course_id(course_id=course_id, session=session)
     return {"is_in_test_mode": lesson is not None}
-
-
-

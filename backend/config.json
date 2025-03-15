@@ -1,6 +1,6 @@
 {
-    "STATE": "sleep",
-    "MODE": "NORMAL",
+    "STATE": "offline",
+    "MODE": "TEST",
     "START_DATE": "2025-01-01",
     "TEACHER_ID": 1,
     "CLASROOM_ID": 1

@@ -11,6 +11,8 @@ const RootLayout = () => {
 	if (!token) {
 	  return <Navigate to="/sign-in" />;
 	}
+
+	console.log("OPEEEEENNNN")
 	return (
 		<div className='w-full h-screen'>
 			<section className='flex-1 h-full w-full px-2 my-5'>

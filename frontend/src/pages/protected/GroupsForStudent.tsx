@@ -45,6 +45,7 @@ const GroupsForStudent = () => {
   
   const { logout, email } = useAuth(); 
   console.log(email);
+  console.log("OPEEEEENNNN")
 
   if (isLoading || isTestLoading) return <p>Loading...</p>;
   if (error) return <p>Error: {(error as Error).message}</p>;

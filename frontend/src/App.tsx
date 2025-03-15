@@ -14,6 +14,9 @@ import AttendanceTest from './pages/protected/AttendanceTest'
 
 function App() {
 	const { isTeacher, userId } = useAuth()
+	console.log("isTeacher: "+ isTeacher)
+	console.log("userId: "+ userId)
+
 	return (
 		<div className='flex h-screen w-full'>
 			<Routes>

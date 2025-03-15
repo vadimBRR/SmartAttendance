@@ -42,6 +42,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
 	const [isLoading, setIsLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const navigate = useNavigate()
+	console.log("OPEEEEENNNN")
 
 	const login = async (email: string, password: string) => {
     console.log("here");
@@ -85,7 +86,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
 
 
 const verifyUserRole = async (email: string) => {
-    const response = await fetch(`http://127.0.0.1:8000/verify-email/teacher?email=${email}`);
+    const response = await fetch(`http://147.232.205.226:8000/verify-email/teacher?email=${email}`);
     if (!response.ok) {
         throw new Error("Error verifying user role");
     }

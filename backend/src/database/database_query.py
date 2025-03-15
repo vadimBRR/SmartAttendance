@@ -432,14 +432,14 @@ def get_lesson_by_classroom_time(arrival_time, day_of_week: str, session=None):
     else:
         arrival_time = datetime.strptime(arrival_time, "%Y-%m-%d %H:%M:%S")
 
-
+    print("1.1")
     today = datetime.today().date()
-
+    print("1.2")
     lessons = session.query(Lesson).filter(
         Lesson.classroom_id == get_classroom_id(),
         Lesson.day_of_week == day_of_week,
     ).all()
-
+    print("1.3")
     if not lessons:
         return None
 
@@ -449,7 +449,7 @@ def get_lesson_by_classroom_time(arrival_time, day_of_week: str, session=None):
 
         lesson_start_datetime = datetime.combine(today, start_time)
         lesson_finish_datetime = datetime.combine(today, finish_time)
-
+        print("1.4")
         lesson_start_datetime_minus_10 = lesson_start_datetime - timedelta(minutes=10)
 
         if lesson_start_datetime_minus_10 <= arrival_time <= lesson_finish_datetime:

@@ -123,13 +123,13 @@ class LessonScheduler:
         lesson_jobs = []
 
         lesson_start_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.start_time))
-        start_notification_time = lesson_start_datetime - timedelta(minutes=self.time_before_lesson)
+        # start_notification_time = lesson_start_datetime - timedelta(minutes=self.time_before_lesson)
 
-        if datetime.now(self.timezone) < start_notification_time:
-            start_job = self.scheduler.add_job(
-                self.send_notification, 'date', run_date=start_notification_time, args=[lesson, 'start']
-            )
-            lesson_jobs.append(start_job)
+        #if datetime.now(self.timezone) < start_notification_time:
+        start_job = self.scheduler.add_job(
+            self.send_notification, 'date', run_date=lesson_start_datetime, args=[lesson, 'start']
+        )
+        lesson_jobs.append(start_job)
 
         lesson_end_datetime = self.timezone.localize(datetime.combine(date.today(), lesson.finish_time))
         end_job = self.scheduler.add_job(
@@ -209,5 +209,4 @@ class LessonScheduler:
             del self.scheduled_jobs[lesson_id]
         else:
             print(f"No jobs found for lesson ID {lesson_id}.")
-
 

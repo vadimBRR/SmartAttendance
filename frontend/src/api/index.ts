@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://127.0.0.1:8000'
+const API_BASE_URL = 'http://147.232.205.226:8000'
 
 export const fetchCourses = async (teacherId: number) => {
 	const response = await fetch(`${API_BASE_URL}/courses/${teacherId}`, {
@@ -183,7 +183,7 @@ export const useLogin = async (
 	formDetails.append('username', email)
 	formDetails.append('password', password)
 
-	const response = await fetch('http://127.0.0.1:8000/token', {
+	const response = await fetch(`${API_BASE_URL}/token`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 		body: formDetails,
@@ -201,7 +201,7 @@ export const useRegister = async (
 	email: string,
 	password: string
 ): Promise<void> => {
-	const response = await fetch('http://127.0.0.1:8000/register', {
+	const response = await fetch(`${API_BASE_URL}/register`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ email, password }),
@@ -213,14 +213,14 @@ export const useRegister = async (
 	}
 }
 export const useVerifyToken = async (token: string): Promise<void> => {
-	const response = await fetch(`http://127.0.0.1:8000/verify-token/${token}`)
+	const response = await fetch(`${API_BASE_URL}/verify-token/${token}`)
 	if (!response.ok) {
 		throw new Error('Token verification failed')
 	}
 }
 
 export const useGetUser = async (token: string): Promise<void> => {
-	const response = await fetch(`http://127.0.0.1:8000/me`, {
+	const response = await fetch(`${API_BASE_URL}/me`, {
 		headers: {
 			Authorization: `Bearer ${token}`,
 		},

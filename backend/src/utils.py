@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from dotenv import load_dotenv
 from src.config_file import get_mode
@@ -28,6 +28,9 @@ def __is_valid_day_format(day_str):
 
 def get_date_details(unix_timestamp):
     arrival_time = datetime.fromtimestamp(unix_timestamp)
+    print("1")
+    # arrival_time = arrival_time - timedelta(hours=1)
+    print("2")
     week_num = __get_current_week(arrival_time)
     day_of_week = datetime.now(pytz.timezone('Europe/Bratislava')).strftime('%A')
     return {
