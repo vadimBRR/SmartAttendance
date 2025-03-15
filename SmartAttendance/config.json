@@ -1,0 +1,1 @@
+{"units": "metric", "encryption_key": "NDA0X2JldGFfa2V5MTIzNDU=", "mqtt": {"server": "147.232.34.94", "user": "maker", "port": 1883, "client_id": "c76c092b", "password": "this.is.mqtt", "base_topic": "gw/404_beta"}, "wifi": {"connection_data": {"ssid": "solaris-things", "password": "welcome.to.the.solaris"}, "connection_time": 6}, "current_class": "solaris"}
